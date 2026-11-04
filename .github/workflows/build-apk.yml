@@ -1,4 +1,4 @@
-name: Build & Sign Android Release APK
+name: Build & Sign Android APK
 
 on:
   push:
@@ -34,21 +34,13 @@ jobs:
           npx cap add android || true
           npx cap sync android
 
-      - name: Build Android Release APK
+      - name: Build Android APK with Native Signatures
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleDebug --no-daemon
 
-      - name: Generate Keystore & Sign APK on the fly
-        run: |
-          keytool -genkey -v -keystore auto-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias taxbook -storepass 123456 -keypass 123456 -dname "CN=TaxBook, OU=App, O=Self, L=Odesa, C=UA"
-          APK_PATH=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore auto-release.jks -storepass 123456 -keypass 123456 $APK_PATH taxbook
-          mkdir -p output
-          cp $APK_PATH output/TaxBook-Signed.apk
-
-      - name: Upload Signed APK
+      - name: Upload Installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: TaxBook-Release-Signed
-          path: output/TaxBook-Signed.apk
+          name: TaxBook-Installable-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
