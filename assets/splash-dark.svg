@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732" fill="none">
+  <rect width="2732" height="2732" fill="#0F172A"/>
+  <g transform="translate(854, 720)">
+    <rect x="148" y="148" width="728" height="728" rx="128" fill="#1E293B" stroke="#38BDF8" stroke-width="24"/>
+    <text x="272" y="308" fill="#38BDF8" font-family="Arial, sans-serif" font-weight="900" font-size="108">№ 261</text>
+    <path d="M272 410H752M272 540H752M272 670H540" stroke="#F8FAFC" stroke-width="48" stroke-linecap="round"/>
+    <circle cx="696" cy="680" r="112" fill="#10B981"/>
+    <path d="M648 680L684 716L752 644" stroke="#FFFFFF" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="1366" y="1780" text-anchor="middle" fill="#F8FAFC" font-family="Arial, sans-serif" font-weight="800" font-size="68">
+    КНИГА ОБЛІКУ ДОХОДІВ І ВИТРАТ ФОП
+  </text>
+  <text x="1366" y="1865" text-anchor="middle" fill="#94A3B8" font-family="Arial, sans-serif" font-weight="600" font-size="44">
+    Типова форма згідно з наказом Мінфіну України № 261
+  </text>
+</svg>

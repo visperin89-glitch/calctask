@@ -1,0 +1,19 @@
+{
+  "name": "Книга обліку доходів і витрат (Форма № 261)",
+  "short_name": "Форма № 261",
+  "description": "Автономний щоденний облік доходів і витрат ФОП на загальній системі та осіб, які здійснюють незалежну професійну діяльність (Наказ Мінфіну № 261 від 13.05.2021)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "any",
+  "lang": "uk-UA",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
