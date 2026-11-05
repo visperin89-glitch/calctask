@@ -106,7 +106,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-dvh w-full max-w-full overflow-x-hidden flex flex-col bg-slate-50 text-slate-900 safe-main-bottom md:pb-8 print:bg-white print:pb-0">
+    <div className="min-h-screen w-full flex flex-col bg-slate-50 text-slate-900 safe-main-bottom md:pb-8 print:bg-white print:pb-0">
       {/* Головний навігаційний хедер (з підтримкою safe-area-inset-top для Android) */}
       <header className="sticky top-0 z-30 bg-slate-900 text-white shadow-md safe-top print:hidden">
         <div className="max-w-7xl mx-auto px-3 sm:px-6">
@@ -225,7 +225,7 @@ export const App: React.FC = () => {
       </header>
 
       {/* Основний контент */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-3.5 sm:py-5 overflow-x-hidden print:max-w-none print:p-0">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-3.5 sm:py-5 print:max-w-none print:p-0">
         {/* Повідомлення про наявність нової версії APK на GitHub */}
         {availableUpdate?.hasUpdate && (
           <div className="mb-3.5 p-3 rounded-2xl bg-emerald-600 text-white shadow-sm flex items-center justify-between gap-2 print:hidden">
@@ -326,8 +326,8 @@ export const App: React.FC = () => {
         <Plus className="w-7 h-7" />
       </button>
 
-      {/* Мобільна нижня панель навігації з центральною кнопкою «+ Запис» (чітко вписана в екран) */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 px-1.5 pt-1.5 safe-bottom grid grid-cols-5 items-center gap-1 shadow-[0_-4px_12px_rgba(15,23,42,0.06)] print:hidden">
+      {/* Мобільна нижня панель навігації з центральною кнопкою «+ Запис» (чітко вписана в екран, без GPU-важкого backdrop-blur) */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 px-1.5 pt-1.5 safe-bottom grid grid-cols-5 items-center gap-1 shadow-lg print:hidden">
         <button
           type="button"
           onClick={() => setActiveTab('JOURNAL')}

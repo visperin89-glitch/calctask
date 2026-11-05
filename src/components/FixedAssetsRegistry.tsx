@@ -477,7 +477,7 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
 
       {/* Модальне вікно створення / редагування об'єкта ОЗ/НА */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/70 p-0 sm:p-4 overflow-y-auto">
           <div className="w-full max-w-xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[94vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3.5 bg-slate-900 text-white">
               <div className="flex items-center gap-2">

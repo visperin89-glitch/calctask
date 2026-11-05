@@ -7,4 +7,16 @@ export default defineConfig({
     port: 5173,
     open: false,
   },
+  build: {
+    target: 'es2020',
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'dexie', 'dexie-react-hooks'],
+          icons: ['lucide-react'],
+        },
+      },
+    },
+  },
 });

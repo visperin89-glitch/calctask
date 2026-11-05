@@ -35,7 +35,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
   selectedYear,
 }) => {
   const [includeAutoAmortization, setIncludeAutoAmortization] = useState(true);
-  const [activeSheet, setActiveSheet] = useState<'MAIN' | 'AMORT' | 'BOTH'>('BOTH');
+  const [activeSheet, setActiveSheet] = useState<'MAIN' | 'AMORT' | 'BOTH'>('MAIN');
   // Режим відображення на смартфоні: 'FIT' (чітко вписаний у ширину екрана) або 'TABLE' (класична широка таблиця)
   const [mobileViewMode, setMobileViewMode] = useState<'FIT' | 'TABLE'>('FIT');
   const [isExporting, setIsExporting] = useState(false);
@@ -112,7 +112,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
     annualReport.yearTotals.col10_amortization;
 
   return (
-    <div className="space-y-4 w-full max-w-full overflow-x-hidden">
+    <div className="space-y-4 w-full">
       {/* Панель керування звітом (приховується під час друку) */}
       <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200 shadow-xs space-y-3.5 print:hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">

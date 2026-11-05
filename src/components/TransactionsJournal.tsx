@@ -144,7 +144,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
   };
 
   return (
-    <div className="space-y-3.5 sm:space-y-5 w-full max-w-full overflow-x-hidden">
+    <div className="space-y-3.5 sm:space-y-5 w-full">
       {/* KPI Картки за обраним фільтром (чітко вписані в екран смартфона) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs min-w-0">

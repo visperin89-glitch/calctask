@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import type {
   AmortizationAppendixReport,
   AnnualReportData,
@@ -44,7 +44,9 @@ export async function exportTaxBookToExcel(
   amortizationReport: AmortizationAppendixReport,
   autoShareOnNative = true
 ): Promise<SaveFileResult> {
-  const workbook = new ExcelJS.Workbook();
+  const ExcelJSModule = await import('exceljs');
+  const ExcelJSRuntime = ExcelJSModule.default || ExcelJSModule;
+  const workbook = new ExcelJSRuntime.Workbook();
   workbook.creator = 'Книга обліку № 261 (PWA)';
   workbook.created = new Date();
 
