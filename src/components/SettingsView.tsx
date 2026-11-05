@@ -4,8 +4,10 @@ import {
   Database,
   Download,
   Info,
+  RefreshCw,
   Save,
   ShieldCheck,
+  Smartphone,
   Sparkles,
   Trash2,
   Upload,
@@ -14,6 +16,13 @@ import {
 import { VAT_PAYER_REMINDER_TEXT } from '../constants/taxConstants';
 import { db, DEFAULT_PROFILE } from '../db/database';
 import type { ActivityType, TaxProfile } from '../types/tax';
+import {
+  checkForAppUpdate,
+  CURRENT_APP_VERSION,
+  DIRECT_APK_DOWNLOAD_URL,
+  triggerApkUpdateDownload,
+  type UpdateCheckResult,
+} from '../utils/appUpdater';
 import {
   exportDatabaseToJson,
   importDatabaseFromJson,
@@ -40,8 +49,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(
     null
   );
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleCheckUpdate = async () => {
+    setIsCheckingUpdate(true);
+    try {
+      const res = await checkForAppUpdate();
+      setUpdateInfo(res);
+      if (res.hasUpdate) {
+        showNotice(
+          'success',
+          `Знайдено нову версію ${res.latestVersion}! Натисніть «Встановити оновлення (.apk)».`
+        );
+      } else {
+        showNotice(
+          'success',
+          `У вас встановлено найновішу версію додатку (${res.currentVersion}).`
+        );
+      }
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
 
   useEffect(() => {
     setFullName(profile.fullName);
@@ -377,6 +409,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>
             Порада: оскільки всі дані зберігаються локально в браузері (IndexedDB), рекомендуємо раз на місяць або перед очищенням кешу браузера натискати «Експортувати базу в JSON-файл».
           </span>
+        </div>
+      </div>
+
+      {/* Картка автоматичного оновлення на телефоні (OTA APK Update з GitHub Releases) */}
+      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <Smartphone className="w-5 h-5 text-blue-600 shrink-0" />
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                Оновлення додатку на телефоні (OTA APK)
+              </h2>
+              <p className="text-xs text-slate-500">
+                Поточна встановлена версія: <strong className="text-slate-800">{CURRENT_APP_VERSION}</strong> • Усі збірки підписуються єдиним ключем і встановлюються поверх без втрати даних
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {updateInfo?.hasUpdate && (
+          <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-300 text-xs sm:text-sm text-blue-950 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <span>
+              Доступна нова версія на GitHub: <strong>{updateInfo.latestVersion}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => triggerApkUpdateDownload(updateInfo.downloadUrl)}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1.5"
+            >
+              <Download className="w-4 h-4" />
+              <span>Завантажити та оновити</span>
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-2.5">
+          <button
+            type="button"
+            onClick={handleCheckUpdate}
+            disabled={isCheckingUpdate}
+            className="flex-1 py-2.5 px-4 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 text-blue-600 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+            <span>{isCheckingUpdate ? 'Перевірка...' : 'Перевірити наявність оновлень'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => triggerApkUpdateDownload( updateInfo?.downloadUrl || DIRECT_APK_DOWNLOAD_URL )}
+            className="flex-1 py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            <Download className="w-4 h-4 text-sky-400" />
+            <span>Завантажити останній APK з GitHub</span>
+          </button>
         </div>
       </div>
     </div>

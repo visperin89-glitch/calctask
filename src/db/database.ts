@@ -23,7 +23,7 @@ export const DEFAULT_PROFILE: TaxProfile = {
   id: 'default',
   fullName: '',
   taxId: '',
-  activityType: 'fop',
+  activityType: 'independent',
   isVatPayer: false,
 };
 

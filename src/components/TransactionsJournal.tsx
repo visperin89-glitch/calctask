@@ -3,7 +3,10 @@ import {
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
+  Briefcase,
   Calendar,
+  ChevronDown,
+  ChevronUp,
   Edit3,
   FileText,
   Filter,
@@ -13,6 +16,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
+  ATTORNEY_EXPENSE_TEMPLATES,
+  type AttorneyExpenseTemplate,
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_MAP,
   TRANSACTION_TYPE_LABELS,
@@ -37,6 +42,7 @@ interface TransactionsJournalProps {
   selectedYear: number;
   onAddClick: () => void;
   onEditTransaction: (tx: TaxTransaction) => void;
+  onSelectAttorneyTemplate?: (template: AttorneyExpenseTemplate) => void;
 }
 
 const PAGE_STEP = 25;
@@ -46,12 +52,14 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
   selectedYear,
   onAddClick,
   onEditTransaction,
+  onSelectAttorneyTemplate,
 }) => {
   const [selectedMonth, setSelectedMonth] = useState<number | 'ALL'>('ALL');
   const [selectedType, setSelectedType] = useState<TransactionType | 'ALL'>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_STEP);
+  const [showAttorneyGuide, setShowAttorneyGuide] = useState<boolean>(false);
 
   const filteredTransactions = useMemo(() => {
     const yearPrefix = `${selectedYear}-`;
@@ -136,73 +144,135 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
   };
 
   return (
-    <div className="space-y-5">
-      {/* KPI Картки за обраним фільтром */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <span>Дохід (Гр. 4 = Гр. 2 − Гр. 3)</span>
-            <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
-              <ArrowUpRight className="w-4 h-4" />
+    <div className="space-y-3.5 sm:space-y-5 w-full max-w-full overflow-x-hidden">
+      {/* KPI Картки за обраним фільтром (чітко вписані в екран смартфона) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs min-w-0">
+          <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="truncate">Дохід (Гр. 4)</span>
+            <span className="p-1 sm:p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+              <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </span>
           </div>
-          <div className="mt-2 text-lg sm:text-2xl font-extrabold text-slate-900">
-            {formatCurrency(summary.netIncome)} <span className="text-xs font-semibold text-slate-500">грн</span>
+          <div className="mt-1.5 sm:mt-2 text-sm sm:text-2xl font-extrabold text-slate-900 truncate">
+            {formatCurrency(summary.netIncome)} <span className="text-[11px] font-semibold text-slate-500">₴</span>
           </div>
           {summary.returns > 0 && (
-            <div className="mt-1 text-[11px] text-amber-700 font-medium">
-              Повернення (Гр. 3): −{formatCurrency(summary.returns)} грн
+            <div className="mt-0.5 text-[10px] sm:text-[11px] text-amber-700 font-medium truncate">
+              Поверн. (Гр. 3): −{formatCurrency(summary.returns)} ₴
             </div>
           )}
         </div>
 
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <span>Витрати (Гр. 6–9)</span>
-            <span className="p-1.5 rounded-lg bg-rose-50 text-rose-600">
-              <ArrowDownRight className="w-4 h-4" />
+        <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs min-w-0">
+          <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="truncate">Витрати (Гр. 6–9)</span>
+            <span className="p-1 sm:p-1.5 rounded-lg bg-rose-50 text-rose-600 shrink-0">
+              <ArrowDownRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </span>
           </div>
-          <div className="mt-2 text-lg sm:text-2xl font-extrabold text-rose-700">
-            {formatCurrency(summary.expenses)} <span className="text-xs font-semibold text-slate-500">грн</span>
+          <div className="mt-1.5 sm:mt-2 text-sm sm:text-2xl font-extrabold text-rose-700 truncate">
+            {formatCurrency(summary.expenses)} <span className="text-[11px] font-semibold text-slate-500">₴</span>
           </div>
-          <div className="mt-1 text-[11px] text-slate-500">
-            Підтверджені первинними документами
+          <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 truncate">
+            За первинними док.
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <span>Чистий дохід (без аморт.)</span>
-            <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
-              <FileText className="w-4 h-4" />
+        <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs min-w-0">
+          <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="truncate">Чистий дохід</span>
+            <span className="p-1 sm:p-1.5 rounded-lg bg-blue-50 text-blue-600 shrink-0">
+              <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </span>
           </div>
           <div
-            className={`mt-2 text-lg sm:text-2xl font-extrabold ${
+            className={`mt-1.5 sm:mt-2 text-sm sm:text-2xl font-extrabold truncate ${
               summary.netProfit >= 0 ? 'text-blue-700' : 'text-rose-700'
             }`}
           >
-            {formatCurrency(summary.netProfit)} <span className="text-xs font-semibold text-slate-500">грн</span>
+            {formatCurrency(summary.netProfit)} <span className="text-[11px] font-semibold text-slate-500">₴</span>
           </div>
-          <div className="mt-1 text-[11px] text-slate-500">
-            Операцій у вибірці: {filteredTransactions.length}
+          <div className="mt-0.5 text-[10px] sm:text-[11px] text-slate-500 truncate">
+            Записів: {filteredTransactions.length}
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-4 text-white shadow-sm flex flex-col justify-between">
-          <div className="text-xs font-medium text-slate-300">
-            Оперативний облік ({selectedYear} рік)
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-3 sm:p-4 text-white shadow-sm flex flex-col justify-between min-w-0">
+          <div className="text-[10px] sm:text-xs font-medium text-slate-300 truncate">
+            Облік ({selectedYear} рік)
           </div>
           <button
             type="button"
             onClick={onAddClick}
-            className="mt-2 w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-colors"
+            className="mt-1.5 w-full py-2 px-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-sm transition-colors"
           >
-            <Plus className="w-4 h-4" />
-            <span>Додати операцію</span>
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="truncate">Додати запис</span>
           </button>
         </div>
+      </div>
+
+      {/* Інтерактивний довідник витрат адвоката (ст. 178 ПКУ) з миттєвим додаванням у Журнал */}
+      <div className="bg-white rounded-2xl border border-indigo-200 shadow-xs overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowAttorneyGuide((prev) => !prev)}
+          className="w-full px-3.5 py-3 bg-indigo-50/70 hover:bg-indigo-50 flex items-center justify-between gap-2 text-left transition-colors"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Briefcase className="w-4 h-4 text-indigo-600 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-xs sm:text-sm font-bold text-indigo-950 truncate">
+                Довідник дозволених витрат адвоката (ст. 178 ПКУ — 17 статей)
+              </div>
+              <div className="text-[10px] sm:text-xs text-indigo-700 truncate">
+                Натисніть, щоб переглянути перелік і додати витрату в 1 дотик
+              </div>
+            </div>
+          </div>
+          <span className="p-1 rounded-lg bg-white text-indigo-700 border border-indigo-200 shrink-0">
+            {showAttorneyGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </span>
+        </button>
+
+        {showAttorneyGuide && (
+          <div className="p-3 sm:p-4 divide-y divide-slate-100 max-h-96 overflow-y-auto">
+            {ATTORNEY_EXPENSE_TEMPLATES.map((item, idx) => {
+              const catInfo = EXPENSE_CATEGORY_MAP[item.category];
+              return (
+                <div
+                  key={item.id}
+                  className="py-2.5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-extrabold text-slate-900">
+                        {idx + 1}. {item.shortLabel}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${catInfo.badgeColor}`}
+                      >
+                        Графа {catInfo.colNumber}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-snug">{item.fullText}</p>
+                  </div>
+                  {onSelectAttorneyTemplate && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectAttorneyTemplate(item)}
+                      className="self-end sm:self-center shrink-0 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Внести</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Панель фільтрів та пошуку */}

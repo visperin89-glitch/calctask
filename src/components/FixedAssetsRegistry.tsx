@@ -331,26 +331,54 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
 
       {/* Таблиця розрахунку за 12 графами (Додаток до типової форми № 261) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="px-4 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-4 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">
-              Додаток до типової форми № 261 — Розрахунок амортизації за {selectedYear} рік (12 граф)
+            <h3 className="text-xs sm:text-sm font-bold text-slate-900">
+              Додаток до типової форми № 261 — Розрахунок амортизації за {selectedYear} рік
             </h3>
-            <p className="text-xs text-slate-500">
+            <p className="text-[11px] sm:text-xs text-slate-500">
               Автоматичний розрахунок граф 1–12 відповідно до розд. ІІІ Порядку № 261
             </p>
           </div>
-          <div className="text-right">
-            <div className="text-[11px] uppercase font-bold text-slate-500">
+          <div className="sm:text-right">
+            <div className="text-[10px] sm:text-[11px] uppercase font-bold text-slate-500">
               До перенесення в Графу 10 Форми № 261
             </div>
-            <div className="text-base font-extrabold text-blue-700">
+            <div className="text-sm sm:text-base font-extrabold text-blue-700">
               {formatCurrency(amortizationReport.totalYearAmortization)} грн
             </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Мобільна зведена картка підсумків Додатка */}
+        <div className="md:hidden p-3.5 grid grid-cols-2 gap-2.5 text-xs bg-slate-50/40">
+          <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+            <div className="text-[11px] text-slate-500">Первісна вартість (Гр. 7)</div>
+            <div className="font-bold text-slate-900 mt-0.5">
+              {formatCurrency(amortizationReport.totalInitialCost)} ₴
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+            <div className="text-[11px] text-slate-500">На поч. року (Гр. 10)</div>
+            <div className="font-bold text-slate-900 mt-0.5">
+              {formatCurrency(amortizationReport.totalStartPeriodValue)} ₴
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200">
+            <div className="text-[11px] text-blue-800 font-semibold">Аморт. за рік (Гр. 11)</div>
+            <div className="font-extrabold text-blue-900 mt-0.5">
+              {formatCurrency(amortizationReport.totalYearAmortization)} ₴
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+            <div className="text-[11px] text-slate-500">На кін. року (Гр. 12)</div>
+            <div className="font-bold text-slate-900 mt-0.5">
+              {formatCurrency(amortizationReport.totalEndPeriodValue)} ₴
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-xs border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-slate-100 text-slate-700 font-bold text-center border-b border-slate-300">

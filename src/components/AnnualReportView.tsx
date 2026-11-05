@@ -4,9 +4,12 @@ import {
   CheckSquare,
   Download,
   FileSpreadsheet,
+  LayoutList,
   Printer,
   Share2,
+  Smartphone,
   Square,
+  Table2,
 } from 'lucide-react';
 import type {
   FixedAsset,
@@ -33,6 +36,8 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
 }) => {
   const [includeAutoAmortization, setIncludeAutoAmortization] = useState(true);
   const [activeSheet, setActiveSheet] = useState<'MAIN' | 'AMORT' | 'BOTH'>('BOTH');
+  // Режим відображення на смартфоні: 'FIT' (чітко вписаний у ширину екрана) або 'TABLE' (класична широка таблиця)
+  const [mobileViewMode, setMobileViewMode] = useState<'FIT' | 'TABLE'>('FIT');
   const [isExporting, setIsExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
@@ -99,99 +104,142 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
     );
   };
 
-  return (
-    <div className="space-y-5">
-      {/* Панель керування звітом (приховується під час друку) */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 print:hidden">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-            <h2 className="text-lg font-bold text-slate-900">
-              Річний звіт за Типовою формою № 261 ({selectedYear} рік)
-            </h2>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-600">
-            Підсумковий реєстр щоденних записів за І–IV квартали та рік згідно з наказом Мінфіну від 13.05.2021 № 261
-          </p>
+  const totalExpensesYear =
+    annualReport.yearTotals.col6_tmc +
+    annualReport.yearTotals.col7_salary +
+    annualReport.yearTotals.col8_taxes +
+    annualReport.yearTotals.col9_other +
+    annualReport.yearTotals.col10_amortization;
 
+  return (
+    <div className="space-y-4 w-full max-w-full overflow-x-hidden">
+      {/* Панель керування звітом (приховується під час друку) */}
+      <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-slate-200 shadow-xs space-y-3.5 print:hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-600 shrink-0" />
+              <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                Річний звіт за Типовою формою № 261 ({selectedYear} рік)
+              </h2>
+            </div>
+            <p className="text-xs text-slate-600">
+              Підсумковий реєстр щоденних записів за І–IV квартали та рік згідно з наказом Мінфіну № 261
+            </p>
+          </div>
+
+          {/* Кнопки експорту та друку */}
+          <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="w-full sm:w-auto justify-center px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors"
+            >
+              {isNativeApp() ? <Share2 className="w-4 h-4 shrink-0" /> : <Download className="w-4 h-4 shrink-0" />}
+              <span>
+                {isExporting
+                  ? 'Формування...'
+                  : isNativeApp()
+                  ? 'Зберегти / Поділитися Excel (.xlsx)'
+                  : 'Завантажити Excel (.xlsx)'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="hidden sm:inline-flex px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold shadow-sm items-center gap-2 transition-colors"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Друк (A4 Landscape)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Перемикачі режимів та автоамортизації */}
+        <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <button
             type="button"
             onClick={() => setIncludeAutoAmortization((prev) => !prev)}
-            className="mt-2 inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-700 hover:text-blue-700"
+            className="inline-flex items-start sm:items-center gap-2 text-left text-xs font-medium text-slate-700 hover:text-blue-700"
           >
             {includeAutoAmortization ? (
-              <CheckSquare className="w-4 h-4 text-blue-600 shrink-0" />
+              <CheckSquare className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 sm:mt-0" />
             ) : (
-              <Square className="w-4 h-4 text-slate-400 shrink-0" />
+              <Square className="w-4 h-4 text-slate-400 shrink-0 mt-0.5 sm:mt-0" />
             )}
             <span>
-              Автоматично переносити річну амортизацію з Додатка ({formatCurrency(amortizationReport.totalYearAmortization)} грн) у Графу 10 на 31.12.{selectedYear}
+              Автоматично переносити амортизацію з Додатка ({formatCurrency(amortizationReport.totalYearAmortization)} грн) у Гр. 10 на 31.12.{selectedYear}
             </span>
           </button>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Перемикач режиму перегляду аркушів */}
-          <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setActiveSheet('MAIN')}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                activeSheet === 'MAIN'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Типова форма
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSheet('AMORT')}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                activeSheet === 'AMORT'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Додаток (Амортизація)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSheet('BOTH')}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                activeSheet === 'BOTH'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Обидва аркуші
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Мобільний перемикач: Під екран смартфона vs Широка таблиця */}
+            <div className="md:hidden inline-flex w-full sm:w-auto rounded-xl bg-blue-50 p-1 border border-blue-200 text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => setMobileViewMode('FIT')}
+                className={`flex-1 px-2.5 py-1.5 rounded-lg flex items-center justify-center gap-1 transition-colors ${
+                  mobileViewMode === 'FIT'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'text-blue-800'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>Під екран</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileViewMode('TABLE')}
+                className={`flex-1 px-2.5 py-1.5 rounded-lg flex items-center justify-center gap-1 transition-colors ${
+                  mobileViewMode === 'TABLE'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'text-blue-800'
+                }`}
+              >
+                <Table2 className="w-3.5 h-3.5" />
+                <span>Таблиця 11 граф</span>
+              </button>
+            </div>
+
+            {/* Перемикач аркушів */}
+            <div className="inline-flex w-full sm:w-auto rounded-xl bg-slate-100 p-1 border border-slate-200 text-[11px] sm:text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setActiveSheet('MAIN')}
+                className={`flex-1 sm:flex-initial px-2.5 py-1.5 rounded-lg transition-colors ${
+                  activeSheet === 'MAIN'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Форма № 261
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSheet('AMORT')}
+                className={`flex-1 sm:flex-initial px-2.5 py-1.5 rounded-lg transition-colors ${
+                  activeSheet === 'AMORT'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Амортизація
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSheet('BOTH')}
+                className={`flex-1 sm:flex-initial px-2.5 py-1.5 rounded-lg transition-colors ${
+                  activeSheet === 'BOTH'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Обидва
+              </button>
+            </div>
           </div>
-
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            disabled={isExporting}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors"
-          >
-            {isNativeApp() ? <Share2 className="w-4 h-4" /> : <Download className="w-4 h-4" />}
-            <span>
-              {isExporting
-                ? 'Формування...'
-                : isNativeApp()
-                ? 'Зберегти / Поділитися Excel (.xlsx)'
-                : 'Завантажити Excel (.xlsx)'}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold shadow-sm flex items-center gap-2 transition-colors"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Друк (A4 Landscape)</span>
-          </button>
         </div>
       </div>
 
@@ -202,11 +250,39 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
         </div>
       )}
 
+      {/* Компактне річне зведення (чітко вписане в екран смартфона) */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 print:hidden">
+        <div className="bg-white rounded-xl p-2.5 sm:p-3.5 border border-slate-200">
+          <div className="text-[10px] sm:text-xs font-semibold text-slate-500 truncate">
+            Дохід за рік (Гр. 4)
+          </div>
+          <div className="text-xs sm:text-lg font-extrabold text-emerald-700 mt-0.5 truncate">
+            {formatCurrency(annualReport.yearTotals.col4_netIncome)} ₴
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-2.5 sm:p-3.5 border border-slate-200">
+          <div className="text-[10px] sm:text-xs font-semibold text-slate-500 truncate">
+            Витрати (Гр. 6–10)
+          </div>
+          <div className="text-xs sm:text-lg font-extrabold text-rose-700 mt-0.5 truncate">
+            {formatCurrency(totalExpensesYear)} ₴
+          </div>
+        </div>
+        <div className="bg-blue-50/90 rounded-xl p-2.5 sm:p-3.5 border border-blue-200">
+          <div className="text-[10px] sm:text-xs font-bold text-blue-800 truncate">
+            Чистий дохід (Гр. 11)
+          </div>
+          <div className="text-xs sm:text-lg font-extrabold text-blue-900 mt-0.5 truncate">
+            {formatCurrency(annualReport.yearTotals.col11_profit)} ₴
+          </div>
+        </div>
+      </div>
+
       {/* АРКУШ 1: ТИПОВА ФОРМА № 261 */}
       {(activeSheet === 'MAIN' || activeSheet === 'BOTH') && (
-        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-300 shadow-xs print:shadow-none print:border-none print:p-0">
+        <div className="bg-white rounded-2xl p-3.5 sm:p-6 border border-slate-300 shadow-xs print:shadow-none print:border-none print:p-0">
           {/* Гриф затвердження */}
-          <div className="flex justify-end text-[11px] leading-snug text-slate-700 mb-3">
+          <div className="flex justify-end text-[10px] sm:text-[11px] leading-snug text-slate-700 mb-2.5">
             <div className="text-right">
               <div className="font-semibold">ЗАТВЕРДЖЕНО</div>
               <div>Наказ Міністерства фінансів України</div>
@@ -215,44 +291,188 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
           </div>
 
           {/* Назва форми */}
-          <div className="text-center max-w-3xl mx-auto mb-4">
-            <h3 className="text-sm sm:text-base font-extrabold uppercase text-slate-900 tracking-tight">
+          <div className="text-center max-w-3xl mx-auto mb-3.5">
+            <h3 className="text-xs sm:text-base font-extrabold uppercase text-slate-900 tracking-tight">
               ТИПОВА ФОРМА, за якою здійснюється облік доходів і витрат
             </h3>
-            <p className="text-xs sm:text-sm font-bold text-slate-800">
+            <p className="text-[11px] sm:text-sm font-bold text-slate-800">
               фізичними особами – підприємцями і фізичними особами, які провадять незалежну професійну діяльність
             </p>
           </div>
 
           {/* Реквізити платника податків */}
-          <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1 print:bg-transparent print:border-none print:p-0">
-            <div>
+          <div className="mb-3.5 p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] sm:text-xs space-y-1 print:bg-transparent print:border-none print:p-0">
+            <div className="break-words">
               <span className="font-semibold text-slate-700">Платник податків (ПІБ):</span>{' '}
               <span className="font-bold text-slate-900">{fullNameDisplay}</span>{' '}
               <span className="text-slate-600">({activityDisplay})</span>
             </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-1">
+            <div className="flex flex-wrap gap-x-5 gap-y-1">
               <div>
-                <span className="font-semibold text-slate-700">
-                  РНОКПП (або серія та номер паспорта):
-                </span>{' '}
+                <span className="font-semibold text-slate-700">РНОКПП / паспорт:</span>{' '}
                 <span className="font-bold text-slate-900">{taxIdDisplay}</span>
               </div>
               <div>
                 <span className="font-semibold text-slate-700">Звітний період:</span>{' '}
                 <span className="font-bold text-slate-900">{selectedYear} рік</span>
               </div>
-              {profile.isVatPayer && (
-                <div className="font-semibold text-blue-700">
-                  Статус: Платник ПДВ (суми доходів і витрат без ПДВ)
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Регламентована таблиця з 11 граф */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse border border-slate-400 min-w-[1020px]">
+          {/* МОБІЛЬНИЙ АДАПТИВНИЙ ВИГЛЯД (чітко вписаний у ширину смартфона без горизонтального скролу) */}
+          {mobileViewMode === 'FIT' && (
+            <div className="md:hidden space-y-4 print:hidden">
+              {annualReport.quarters.map((qBlock) => {
+                const qTotalExp =
+                  qBlock.quarterTotals.col6_tmc +
+                  qBlock.quarterTotals.col7_salary +
+                  qBlock.quarterTotals.col8_taxes +
+                  qBlock.quarterTotals.col9_other +
+                  qBlock.quarterTotals.col10_amortization;
+
+                return (
+                  <div
+                    key={qBlock.quarter}
+                    className="rounded-xl border border-slate-300 overflow-hidden bg-white"
+                  >
+                    <div className="bg-slate-800 text-white px-3 py-2 flex items-center justify-between text-xs font-bold">
+                      <span>І{qBlock.quarter === 1 ? '' : qBlock.quarter === 2 ? 'І' : qBlock.quarter === 3 ? 'ІІ' : 'V'} квартал {selectedYear} р.</span>
+                      <span className="text-sky-300">
+                        Чистий: {formatCurrency(qBlock.quarterTotals.col11_profit)} ₴
+                      </span>
+                    </div>
+
+                    {qBlock.rows.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-slate-400 italic">
+                        Операції у {qBlock.quarter} кварталі відсутні
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-200">
+                        {qBlock.rows.map((dRow, idx) => (
+                          <div
+                            key={`${dRow.date}-${idx}`}
+                            className={`p-3 space-y-2 text-xs ${
+                              dRow.isAmortizationEntry ? 'bg-blue-50/60' : 'bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-extrabold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">
+                                Гр. 1: {dRow.formattedDate}
+                              </span>
+                              <span
+                                className={`font-extrabold ${
+                                  dRow.col11_profit >= 0 ? 'text-blue-700' : 'text-rose-700'
+                                }`}
+                              >
+                                Гр. 11: {formatCurrency(dRow.col11_profit)} ₴
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 p-2 rounded-lg border border-slate-100">
+                              {dRow.col2_income > 0 && (
+                                <div>
+                                  <span className="text-slate-500">Гр. 2 (Дохід):</span>{' '}
+                                  <strong className="text-emerald-700">
+                                    {formatCurrency(dRow.col2_income)}
+                                  </strong>
+                                </div>
+                              )}
+                              {dRow.col3_return > 0 && (
+                                <div>
+                                  <span className="text-slate-500">Гр. 3 (Поверн.):</span>{' '}
+                                  <strong className="text-amber-700">
+                                    {formatCurrency(dRow.col3_return)}
+                                  </strong>
+                                </div>
+                              )}
+                              {dRow.col4_netIncome > 0 && (
+                                <div>
+                                  <span className="text-slate-500">Гр. 4 (Деклар.):</span>{' '}
+                                  <strong className="text-slate-900">
+                                    {formatCurrency(dRow.col4_netIncome)}
+                                  </strong>
+                                </div>
+                              )}
+                              {dRow.col6_tmc > 0 && (
+                                <div>
+                                  <span className="text-slate-500">Гр. 6 (ТМЦ):</span>{' '}
+                                  <strong className="text-rose-700">
+                                    {formatCurrency(dRow.col6_tmc)}
+                                  </strong>
+                                </div>
+                              )}
+                              {dRow.col7_salary > 0 && (
+                                <div>
+                                  <span className="text-slate-500">Гр. 7 (ЗП):</span>{' '}
+                                  <strong className="text-rose-700">
+                                    {formatCurrency(dRow.col7_salary)}
+                                  </strong>
+                                </div>
+                              )}
+                              {dRow.col8_taxes > 0 && (
+                                <div>
+                                  <span className="text-slate-500">Гр. 8 (ЄСВ/Под.):</span>{' '}
+                                  <strong className="text-rose-700">
+                                    {formatCurrency(dRow.col8_taxes)}
+                                  </strong>
+                                </div>
+                              )}
+                              {dRow.col9_other > 0 && (
+                                <div>
+                                  <span className="text-slate-500">Гр. 9 (Інші):</span>{' '}
+                                  <strong className="text-rose-700">
+                                    {formatCurrency(dRow.col9_other)}
+                                  </strong>
+                                </div>
+                              )}
+                              {dRow.col10_amortization > 0 && (
+                                <div className="col-span-2">
+                                  <span className="text-slate-500">Гр. 10 (Амортизація):</span>{' '}
+                                  <strong className="text-blue-700">
+                                    {formatCurrency(dRow.col10_amortization)}
+                                  </strong>
+                                </div>
+                              )}
+                            </div>
+
+                            {dRow.col5_docs && (
+                              <div className="text-[11px] text-slate-600 break-words">
+                                <span className="font-semibold text-slate-700">Гр. 5 (Документи):</span>{' '}
+                                {dRow.col5_docs}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Підсумок кварталу та наростаючий підсумок */}
+                    <div className="bg-slate-100 p-2.5 border-t border-slate-300 text-[11px] space-y-1">
+                      <div className="font-bold text-slate-900 flex justify-between">
+                        <span>{qBlock.quarterLabel}:</span>
+                        <span>
+                          Дохід: {formatCurrency(qBlock.quarterTotals.col4_netIncome)} | Витрати:{' '}
+                          {formatCurrency(qTotalExp)}
+                        </span>
+                      </div>
+                      <div className="font-extrabold text-blue-900 flex justify-between pt-1 border-t border-slate-200">
+                        <span>{qBlock.cumulativeLabel}:</span>
+                        <span>{formatCurrency(qBlock.cumulativeTotals.col11_profit)} ₴</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ПОВНА РЕГЛАМЕНТОВАНА ТАБЛИЦЯ З 11 ГРАФ (десктоп, друк або обраний режим TABLE на смартфоні) */}
+          <div
+            className={`${
+              mobileViewMode === 'FIT' ? 'hidden md:block print:block' : 'block'
+            } overflow-x-auto -mx-1 px-1`}
+          >
+            <table className="w-full text-[11px] border-collapse border border-slate-400 min-w-[980px]">
               <thead>
                 <tr className="bg-slate-100 text-slate-900 font-bold text-center">
                   <th rowSpan={2} className="p-1.5 border border-slate-400 w-20">
@@ -294,7 +514,6 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                     амортизаційні відрахування (грн, коп.)
                   </th>
                 </tr>
-                {/* Рядок нумерації граф 1–11 */}
                 <tr className="bg-slate-200 text-slate-900 font-extrabold text-center">
                   {Array.from({ length: 11 }, (_, idx) => (
                     <th key={idx + 1} className="py-1 px-1.5 border border-slate-400">
@@ -376,7 +595,6 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                       ))
                     )}
 
-                    {/* Підсумок за квартал */}
                     <tr className="bg-slate-100">
                       <td className="p-1.5 border border-slate-400 font-bold text-slate-900">
                         {qBlock.quarterLabel}
@@ -384,7 +602,6 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                       {renderTotalsCells(qBlock.quarterTotals, false)}
                     </tr>
 
-                    {/* Наростаючий підсумок */}
                     <tr
                       className={
                         qBlock.quarter === 4
@@ -403,12 +620,12 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
             </table>
           </div>
 
-          <div className="mt-5 text-xs font-semibold text-slate-800 flex items-center justify-between">
-            <div>
+          <div className="mt-4 text-[11px] sm:text-xs font-semibold text-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <div className="truncate">
               Платник податків: _____________________ / {fullNameDisplay} /
             </div>
             <div className="text-slate-500">
-              Сформовано згідно з Порядком Мінфіну № 261 від 13.05.2021
+              Сформовано згідно з Порядком Мінфіну № 261
             </div>
           </div>
         </div>
@@ -416,28 +633,91 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
 
       {/* АРКУШ 2: ДОДАТОК ДО ТИПОВОЇ ФОРМИ (АМОРТИЗАЦІЯ) */}
       {(activeSheet === 'AMORT' || activeSheet === 'BOTH') && (
-        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-slate-300 shadow-xs print:shadow-none print:border-none print:p-0 print:break-before-page">
-          <div className="flex justify-end text-[11px] leading-snug text-slate-700 mb-3">
+        <div className="bg-white rounded-2xl p-3.5 sm:p-6 border border-slate-300 shadow-xs print:shadow-none print:border-none print:p-0 print:break-before-page">
+          <div className="flex justify-end text-[10px] sm:text-[11px] leading-snug text-slate-700 mb-2.5">
             <div className="text-right max-w-xs">
               <div className="font-semibold">Додаток</div>
               <div>
-                до типової форми, за якою здійснюється облік доходів і витрат фізичними особами – підприємцями і фізичними особами, які провадять незалежну професійну діяльність
+                до типової форми обліку доходів і витрат (пункт 1 розділу ІІІ)
               </div>
-              <div>(пункт 1 розділу ІІІ)</div>
             </div>
           </div>
 
-          <div className="text-center max-w-3xl mx-auto mb-4">
-            <h3 className="text-sm sm:text-base font-extrabold uppercase text-slate-900">
+          <div className="text-center max-w-3xl mx-auto mb-3.5">
+            <h3 className="text-xs sm:text-base font-extrabold uppercase text-slate-900">
               ОБЛІК АМОРТИЗАЦІЙНИХ ВІДРАХУВАНЬ
             </h3>
-            <p className="text-xs sm:text-sm font-bold text-slate-800">
+            <p className="text-[11px] sm:text-sm font-bold text-slate-800">
               основних засобів та нематеріальних активів за {selectedYear} рік
             </p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse border border-slate-400 min-w-[1020px]">
+          {/* Мобільний компактний вигляд Додатка з амортизації */}
+          {mobileViewMode === 'FIT' && (
+            <div className="md:hidden space-y-2.5 print:hidden">
+              {amortizationReport.rows.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400 italic border border-slate-200 rounded-xl">
+                  Об’єкти ОЗ / НА у {selectedYear} році відсутні
+                </div>
+              ) : (
+                amortizationReport.rows.map((row) => (
+                  <div
+                    key={row.index}
+                    className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-bold text-slate-900">
+                        #{row.index}. {row.col3_assetName}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-bold text-[11px] shrink-0">
+                        Гр. 11: {formatCurrency(row.col11_yearAmortization)} ₴
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-600">{row.col2_groupName}</div>
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-white p-2 rounded-lg border border-slate-200">
+                      <div>
+                        <span className="text-slate-500">Гр. 7 (Первісна):</span>{' '}
+                        <strong>{formatCurrency(row.col7_initialCost)}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Гр. 6 (Строк):</span>{' '}
+                        <strong>{row.col6_usefulLifeYears} р.</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Гр. 8 (Річна):</span>{' '}
+                        <strong>{formatCurrency(row.col8_annualAmount)}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Гр. 9 (Місячна):</span>{' '}
+                        <strong>{formatCurrency(row.col9_monthlyAmount)}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Гр. 10 (На поч.):</span>{' '}
+                        <strong>{formatCurrency(row.col10_startPeriodValue)}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Гр. 12 (На кін.):</span>{' '}
+                        <strong>{formatCurrency(row.col12_endPeriodValue)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              <div className="p-3 rounded-xl bg-blue-100/80 border border-blue-300 text-xs font-extrabold text-blue-950 flex justify-between">
+                <span>УСЬОГО амортизація за {selectedYear} рік (Гр. 11):</span>
+                <span>{formatCurrency(amortizationReport.totalYearAmortization)} ₴</span>
+              </div>
+            </div>
+          )}
+
+          {/* Повна таблиця 12 граф Додатка */}
+          <div
+            className={`${
+              mobileViewMode === 'FIT' ? 'hidden md:block print:block' : 'block'
+            } overflow-x-auto -mx-1 px-1`}
+          >
+            <table className="w-full text-[11px] border-collapse border border-slate-400 min-w-[980px]">
               <thead>
                 <tr className="bg-slate-100 text-slate-900 font-bold text-center">
                   <th rowSpan={2} className="p-1.5 border border-slate-400 w-10">
