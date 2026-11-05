@@ -89,7 +89,9 @@ android {
             keyPassword "123456"
             v1SigningEnabled true
             v2SigningEnabled true
-            v3SigningEnabled true
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
     buildTypes {
