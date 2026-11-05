@@ -6,6 +6,15 @@
   html {
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    background-color: #f8fafc;
+    color: #0f172a;
+    transition: background-color 220ms ease, color 220ms ease;
+  }
+
+  html.dark {
+    color-scheme: dark;
+    background-color: #0f172a;
+    color: #f1f5f9;
   }
 
   body {
@@ -14,7 +23,74 @@
     overflow-x: clip;
     touch-action: manipulation;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background-color: inherit;
+    color: inherit;
   }
+
+  button,
+  [role="button"] {
+    transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 200ms ease,
+      border-color 200ms ease,
+      color 200ms ease,
+      box-shadow 200ms ease;
+  }
+
+  button:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+}
+
+/* Global Dark Mode Surface Harmonization (#0f172a / #1e293b) */
+html.dark .bg-slate-50 {
+  background-color: #0f172a !important;
+}
+
+html.dark .bg-white {
+  background-color: #1e293b !important;
+}
+
+html.dark .bg-slate-100 {
+  background-color: #0f172a !important;
+}
+
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-300 {
+  border-color: #334155 !important;
+}
+
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #334155 !important;
+}
+
+html.dark .text-slate-900,
+html.dark .text-slate-800 {
+  color: #f8fafc !important;
+}
+
+html.dark .text-slate-700,
+html.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-slate-500,
+html.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #0f172a;
+  color: #f8fafc;
+  border-color: #334155;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b;
 }
 
 /* Безпечні відступи для системних панелей Android / iOS */
@@ -36,6 +112,7 @@
     margin: 10mm;
   }
 
+  html,
   body {
     background: #ffffff !important;
     color: #000000 !important;

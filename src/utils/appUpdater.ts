@@ -4,7 +4,7 @@ export const GITHUB_REPO_OWNER = 'visperin89-glitch';
 export const GITHUB_REPO_NAME = 'calctask';
 export const RELEASE_TAG = 'latest-apk';
 
-export const CURRENT_BUILD_NUMBER = 6;
+export const CURRENT_BUILD_NUMBER = 7;
 export const CURRENT_APP_VERSION = `1.0.${CURRENT_BUILD_NUMBER}`;
 
 export const DIRECT_APK_DOWNLOAD_URL = `https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/releases/download/${RELEASE_TAG}/TaxBook-Signed.apk`;
