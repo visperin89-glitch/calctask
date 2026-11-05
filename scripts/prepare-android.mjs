@@ -77,8 +77,10 @@ if (fs.existsSync(androidDir)) {
     gradleContent = gradleContent.replace(/versionCode\s+\d+/, `versionCode ${buildNumber}`);
     gradleContent = gradleContent.replace(/versionName\s+"[^"]+"/, `versionName "${versionName}"`);
 
-    // Додаємо signingConfigs.release та налаштовуємо buildTypes без debuggable
-    const releaseSigningBlock = `
+    if (!gradleContent.includes('zipalignBin')) {
+      gradleContent += `
+
+android {
     signingConfigs {
         release {
             storeFile file("release-key.keystore")
@@ -96,7 +98,6 @@ if (fs.existsSync(androidDir)) {
             minifyEnabled false
             debuggable false
             jniDebuggable false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
         debug {
             signingConfig signingConfigs.release
@@ -104,18 +105,8 @@ if (fs.existsSync(androidDir)) {
             debuggable false
             jniDebuggable false
         }
-    }`;
-
-    if (gradleContent.includes('buildTypes {')) {
-      gradleContent = gradleContent.replace(
-        /buildTypes\s*\{[\s\S]*?\n\s*\}/,
-        releaseSigningBlock.trim()
-      );
     }
-
-    // Додаємо автоматичний хук zipalign + apksigner (v1, v2, v3) для формування чистого релізного APK
-    if (!gradleContent.includes('zipalignBin')) {
-      gradleContent += `
+}
 
 tasks.whenTaskAdded { task ->
     if (task.name == 'assembleDebug') {
