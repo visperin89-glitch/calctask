@@ -17,10 +17,11 @@ import { VAT_PAYER_REMINDER_TEXT } from '../constants/taxConstants';
 import { db, DEFAULT_PROFILE } from '../db/database';
 import type { ActivityType, TaxProfile } from '../types/tax';
 import {
+  type ApkDownloadProgress,
   checkForAppUpdate,
   CURRENT_APP_VERSION,
-  DIRECT_APK_DOWNLOAD_URL,
-  triggerApkUpdateDownload,
+  downloadAndInstallApkInApp,
+  formatMegabytes,
   type UpdateCheckResult,
 } from '../utils/appUpdater';
 import {
@@ -54,8 +55,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateInlineNotice, setUpdateInlineNotice] = useState<string | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
+  const [isDownloadingApk, setIsDownloadingApk] = useState<boolean>(false);
+  const [downloadProgress, setDownloadProgress] = useState<ApkDownloadProgress | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleStartInAppInstall = async (url: string) => {
+    setIsDownloadingApk(true);
+    setDownloadProgress({ percent: 0, downloadedBytes: 0, totalBytes: 0 });
+    try {
+      await downloadAndInstallApkInApp(url, (prog) => {
+        setDownloadProgress(prog);
+      });
+      setUpdateInlineNotice(
+        'Завантаження завершено (100%)! Підтвердіть встановлення у вікні системи Android.'
+      );
+    } catch (err) {
+      setUpdateInlineNotice(
+        err instanceof Error ? err.message : 'Помилка під час завантаження APK-оновлення.'
+      );
+    } finally {
+      setIsDownloadingApk(false);
+    }
+  };
 
   const handleCheckUpdate = async () => {
     setIsCheckingUpdate(true);
@@ -65,7 +87,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setUpdateInfo(res);
       if (res.hasUpdate) {
         setUpdateInlineNotice(
-          `Доступне нове оновлення: версія ${res.latestVersion} (поточна: ${res.currentVersion}). Натисніть кнопку нижче для встановлення!`
+          `Доступне нове оновлення: версія ${res.latestVersion} (поточна: ${res.currentVersion}). Натисніть «Завантажити та встановити» нижче!`
         );
         onUpdateFound?.(res);
       } else if (res.checkedOk) {
@@ -449,39 +471,59 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
 
         {updateInfo?.hasUpdate && (
-          <div className="p-3.5 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-sm">
-            <span>
-              Нова версія <strong>{updateInfo.latestVersion}</strong> готова до встановлення!
-            </span>
-            <button
-              type="button"
-              onClick={() => triggerApkUpdateDownload(updateInfo.downloadUrl)}
-              className="px-4 py-2 rounded-xl bg-white text-emerald-900 text-xs font-extrabold shadow-xs flex items-center justify-center gap-1.5"
-            >
-              <Download className="w-4 h-4" />
-              <span>Встановити оновлення</span>
-            </button>
+          <div className="p-4 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-semibold space-y-3 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <span>
+                Нова версія <strong>{updateInfo.latestVersion}</strong> готова до встановлення!
+              </span>
+              <button
+                type="button"
+                disabled={isDownloadingApk}
+                onClick={() => handleStartInAppInstall(updateInfo.downloadUrl)}
+                className="px-4 py-2 rounded-xl bg-white text-emerald-900 text-xs font-extrabold shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                <Download className="w-4 h-4" />
+                <span>
+                  {isDownloadingApk ? 'Завантаження у додатку...' : 'Завантажити та встановити'}
+                </span>
+              </button>
+            </div>
+
+            {isDownloadingApk && downloadProgress && (
+              <div className="space-y-1.5 bg-emerald-800/50 p-3 rounded-xl border border-emerald-400/30">
+                <div className="flex items-center justify-between text-[11px] font-bold text-emerald-50">
+                  <span>
+                    Завантаження APK: {downloadProgress.percent >= 0 ? `${downloadProgress.percent}%` : '...'}
+                  </span>
+                  {downloadProgress.totalBytes > 0 && (
+                    <span>
+                      {formatMegabytes(downloadProgress.downloadedBytes)} /{' '}
+                      {formatMegabytes(downloadProgress.totalBytes)}
+                    </span>
+                  )}
+                </div>
+                <div className="w-full h-2.5 bg-emerald-950/60 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-white rounded-full transition-all duration-150"
+                    style={{
+                      width: `${Math.max(5, Math.min(100, downloadProgress.percent || 5))}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row gap-2.5">
+        <div>
           <button
             type="button"
             onClick={handleCheckUpdate}
-            disabled={isCheckingUpdate}
-            className="flex-1 py-2.5 px-4 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+            disabled={isCheckingUpdate || isDownloadingApk}
+            className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs"
           >
-            <RefreshCw className={`w-4 h-4 text-blue-600 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
-            <span>{isCheckingUpdate ? 'Перевірка...' : 'Перевірити наявність оновлень'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => triggerApkUpdateDownload( updateInfo?.downloadUrl || DIRECT_APK_DOWNLOAD_URL )}
-            className="flex-1 py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
-          >
-            <Download className="w-4 h-4 text-sky-400" />
-            <span>Завантажити останній APK з GitHub</span>
+            <RefreshCw className={`w-4 h-4 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+            <span>{isCheckingUpdate ? 'Перевірка оновлень...' : 'Перевірити наявність оновлень'}</span>
           </button>
         </div>
       </div>

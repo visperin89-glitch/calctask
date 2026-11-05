@@ -24,8 +24,10 @@ import {
 import { db, DEFAULT_PROFILE, ensureDefaultProfile } from './db/database';
 import type { TaxTransaction } from './types/tax';
 import {
+  type ApkDownloadProgress,
   checkForAppUpdate,
-  triggerApkUpdateDownload,
+  downloadAndInstallApkInApp,
+  formatMegabytes,
   type UpdateCheckResult,
 } from './utils/appUpdater';
 import { seedDemoData } from './utils/backup';
@@ -45,6 +47,28 @@ export const App: React.FC = () => {
   const [presetAttorneyTemplate, setPresetAttorneyTemplate] =
     useState<AttorneyExpenseTemplate | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<UpdateCheckResult | null>(null);
+  const [isDownloadingModalApk, setIsDownloadingModalApk] = useState<boolean>(false);
+  const [modalDownloadProgress, setModalDownloadProgress] = useState<ApkDownloadProgress | null>(
+    null
+  );
+  const [modalDownloadError, setModalDownloadError] = useState<string | null>(null);
+
+  const handleStartModalInstall = async (url: string) => {
+    setIsDownloadingModalApk(true);
+    setModalDownloadError(null);
+    setModalDownloadProgress({ percent: 0, downloadedBytes: 0, totalBytes: 0 });
+    try {
+      await downloadAndInstallApkInApp(url, (prog) => {
+        setModalDownloadProgress(prog);
+      });
+    } catch (err) {
+      setModalDownloadError(
+        err instanceof Error ? err.message : 'Помилка завантаження оновлення.'
+      );
+    } finally {
+      setIsDownloadingModalApk(false);
+    }
+  };
 
   useEffect(() => {
     ensureDefaultProfile()
@@ -235,11 +259,12 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onClick={() => triggerApkUpdateDownload(availableUpdate.downloadUrl)}
-                className="px-3 py-1.5 rounded-xl bg-white text-emerald-900 text-xs font-extrabold flex items-center gap-1 shadow-2xs"
+                disabled={isDownloadingModalApk}
+                onClick={() => handleStartModalInstall(availableUpdate.downloadUrl)}
+                className="px-3 py-1.5 rounded-xl bg-white text-emerald-900 text-xs font-extrabold flex items-center gap-1 shadow-2xs disabled:opacity-60"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Оновити</span>
+                <span>{isDownloadingModalApk ? 'Завантаження...' : 'Оновити'}</span>
               </button>
               <button
                 type="button"
@@ -350,27 +375,64 @@ export const App: React.FC = () => {
             )}
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Натисніть <strong>«Завантажити та встановити»</strong> — смартфон скачає оновлений пакет <code className="text-[11px] bg-slate-100 px-1 rounded">TaxBook-Signed.apk</code> і встановить його поверх поточної версії зі збереженням усіх ваших даних.
+              Натисніть <strong>«Завантажити та встановити»</strong> — оновлення завантажиться прямо всередині додатку й автоматично відкриє системне вікно встановлення Android без переходу в браузер.
             </p>
+
+            {isDownloadingModalApk && modalDownloadProgress && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
+                  <span>
+                    Завантаження у додатку:{' '}
+                    {modalDownloadProgress.percent >= 0 ? `${modalDownloadProgress.percent}%` : '...'}
+                  </span>
+                  {modalDownloadProgress.totalBytes > 0 && (
+                    <span className="text-[11px] text-emerald-700">
+                      {formatMegabytes(modalDownloadProgress.downloadedBytes)} /{' '}
+                      {formatMegabytes(modalDownloadProgress.totalBytes)}
+                    </span>
+                  )}
+                </div>
+                <div className="w-full h-3 bg-emerald-200/80 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-600 rounded-full transition-all duration-150"
+                    style={{
+                      width: `${Math.max(5, Math.min(100, modalDownloadProgress.percent || 5))}%`,
+                    }}
+                  />
+                </div>
+                {modalDownloadProgress.percent === 100 && (
+                  <p className="text-[11px] font-semibold text-emerald-800">
+                    Завантаження завершено! Відкриваємо вікно встановлення Android...
+                  </p>
+                )}
+              </div>
+            )}
+
+            {modalDownloadError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-800">
+                {modalDownloadError}
+              </div>
+            )}
 
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
+                disabled={isDownloadingModalApk}
                 onClick={() => setAvailableUpdate(null)}
-                className="flex-1 py-2.5 px-3 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100"
+                className="flex-1 py-2.5 px-3 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 disabled:opacity-50"
               >
                 Пізніше
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  triggerApkUpdateDownload(availableUpdate.downloadUrl);
-                  setAvailableUpdate(null);
-                }}
-                className="flex-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-md flex items-center justify-center gap-1.5"
+                disabled={isDownloadingModalApk}
+                onClick={() => handleStartModalInstall(availableUpdate.downloadUrl)}
+                className="flex-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-extrabold shadow-md flex items-center justify-center gap-1.5"
               >
                 <Download className="w-4 h-4 shrink-0" />
-                <span>Завантажити та встановити</span>
+                <span>
+                  {isDownloadingModalApk ? 'Завантаження...' : 'Завантажити та встановити'}
+                </span>
               </button>
             </div>
           </div>
