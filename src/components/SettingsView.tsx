@@ -34,6 +34,7 @@ interface SettingsViewProps {
   selectedYear: number;
   transactionsCount: number;
   fixedAssetsCount: number;
+  onUpdateFound?: (update: UpdateCheckResult) => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -41,6 +42,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   selectedYear,
   transactionsCount,
   fixedAssetsCount,
+  onUpdateFound,
 }) => {
   const [fullName, setFullName] = useState(profile.fullName);
   const [taxId, setTaxId] = useState(profile.taxId);
@@ -50,24 +52,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     null
   );
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [updateInlineNotice, setUpdateInlineNotice] = useState<string | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleCheckUpdate = async () => {
     setIsCheckingUpdate(true);
+    setUpdateInlineNotice(null);
     try {
       const res = await checkForAppUpdate();
       setUpdateInfo(res);
       if (res.hasUpdate) {
-        showNotice(
-          'success',
-          `Знайдено нову версію ${res.latestVersion}! Натисніть «Встановити оновлення (.apk)».`
+        setUpdateInlineNotice(
+          `Доступне нове оновлення: версія ${res.latestVersion} (поточна: ${res.currentVersion}). Натисніть кнопку нижче для встановлення!`
+        );
+        onUpdateFound?.(res);
+      } else if (res.checkedOk) {
+        setUpdateInlineNotice(
+          `Перевірено щойно: у вас вже встановлено найновішу версію додатку (${res.currentVersion}).`
         );
       } else {
-        showNotice(
-          'success',
-          `У вас встановлено найновішу версію додатку (${res.currentVersion}).`
+        setUpdateInlineNotice(
+          `Поточна версія: ${res.currentVersion}. Новіших релізів на сервері ще немає або відсутній інтернет.`
         );
       }
     } finally {
@@ -428,18 +435,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
 
+        {updateInlineNotice && (
+          <div
+            className={`p-3.5 rounded-xl border text-xs sm:text-sm font-semibold flex items-center gap-2.5 ${
+              updateInfo?.hasUpdate
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                : 'bg-blue-50 border-blue-200 text-blue-900'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-blue-600" />
+            <span>{updateInlineNotice}</span>
+          </div>
+        )}
+
         {updateInfo?.hasUpdate && (
-          <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-300 text-xs sm:text-sm text-blue-950 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="p-3.5 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-sm">
             <span>
-              Доступна нова версія на GitHub: <strong>{updateInfo.latestVersion}</strong>
+              Нова версія <strong>{updateInfo.latestVersion}</strong> готова до встановлення!
             </span>
             <button
               type="button"
               onClick={() => triggerApkUpdateDownload(updateInfo.downloadUrl)}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-white text-emerald-900 text-xs font-extrabold shadow-xs flex items-center justify-center gap-1.5"
             >
               <Download className="w-4 h-4" />
-              <span>Завантажити та оновити</span>
+              <span>Встановити оновлення</span>
             </button>
           </div>
         )}

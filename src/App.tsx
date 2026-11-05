@@ -311,9 +311,71 @@ export const App: React.FC = () => {
             selectedYear={selectedYear}
             transactionsCount={transactions.length}
             fixedAssetsCount={fixedAssets.length}
+            onUpdateFound={(upd) => setAvailableUpdate(upd)}
           />
         )}
       </main>
+
+      {/* Модальне вікно автоматичної пропозиції оновлення додатку */}
+      {availableUpdate?.hasUpdate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 p-4 print:hidden">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden p-5 space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Доступне оновлення!
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Нова версія: <strong className="text-emerald-700">{availableUpdate.latestVersion}</strong> (поточна: {availableUpdate.currentVersion})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAvailableUpdate(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {availableUpdate.releaseNotes && (
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 max-h-36 overflow-y-auto whitespace-pre-line">
+                {availableUpdate.releaseNotes}
+              </div>
+            )}
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Натисніть <strong>«Завантажити та встановити»</strong> — смартфон скачає оновлений пакет <code className="text-[11px] bg-slate-100 px-1 rounded">TaxBook-Signed.apk</code> і встановить його поверх поточної версії зі збереженням усіх ваших даних.
+            </p>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setAvailableUpdate(null)}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100"
+              >
+                Пізніше
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerApkUpdateDownload(availableUpdate.downloadUrl);
+                  setAvailableUpdate(null);
+                }}
+                className="flex-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-md flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-4 h-4 shrink-0" />
+                <span>Завантажити та встановити</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Десктопна плаваюча кнопка швидкого введення */}
       <button
