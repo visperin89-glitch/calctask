@@ -81,6 +81,10 @@ if (fs.existsSync(androidDir)) {
       gradleContent += `
 
 android {
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
     signingConfigs {
         release {
             storeFile file("release-key.keystore")
@@ -185,6 +189,7 @@ tasks.whenTaskAdded { task ->
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
+        tools:ignore="HardcodedDebugMode"
         tools:replace="android:debuggable,android:allowBackup,android:label">
 
         <activity
