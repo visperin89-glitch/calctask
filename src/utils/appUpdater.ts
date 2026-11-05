@@ -1,10 +1,8 @@
-import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
-
 export const GITHUB_REPO_OWNER = 'visperin89-glitch';
 export const GITHUB_REPO_NAME = 'calctask';
 export const RELEASE_TAG = 'latest-apk';
 
-export const CURRENT_BUILD_NUMBER = 7;
+export const CURRENT_BUILD_NUMBER = 8;
 export const CURRENT_APP_VERSION = `1.0.${CURRENT_BUILD_NUMBER}`;
 
 export const DIRECT_APK_DOWNLOAD_URL = `https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/releases/download/${RELEASE_TAG}/TaxBook-Signed.apk`;
@@ -14,16 +12,6 @@ export interface ApkDownloadProgress {
   downloadedBytes: number;
   totalBytes: number;
 }
-
-interface ApkUpdaterPlugin {
-  downloadAndInstall(options: { url: string }): Promise<{ success: boolean }>;
-  addListener(
-    eventName: 'downloadProgress',
-    listenerFunc: (progress: ApkDownloadProgress) => void
-  ): Promise<PluginListenerHandle>;
-}
-
-const ApkUpdater = registerPlugin<ApkUpdaterPlugin>('ApkUpdater');
 
 export interface UpdateCheckResult {
   checkedOk: boolean;
@@ -99,35 +87,22 @@ export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
 }
 
 /**
- * Завантажує оновлений APK безпосередньо всередині додатку з індикатором прогресу (0-100%)
- * та автоматично відкриває системне вікно встановлення Android без переходу в браузер.
+ * Запускає завантаження оновленого APK через системний менеджер завантажень Android
+ * із відображенням смуги прогресу підготовки в додатку (без використання підозрілого для
+ * Play Protect дозволу REQUEST_INSTALL_PACKAGES).
  */
 export async function downloadAndInstallApkInApp(
   downloadUrl = DIRECT_APK_DOWNLOAD_URL,
   onProgress?: (progress: ApkDownloadProgress) => void
 ): Promise<void> {
-  if (Capacitor.isNativePlatform()) {
-    let listener: PluginListenerHandle | null = null;
-    try {
-      if (onProgress) {
-        onProgress({ percent: 0, downloadedBytes: 0, totalBytes: 0 });
-        listener = await ApkUpdater.addListener('downloadProgress', (prog) => {
-          onProgress(prog);
-        });
-      }
-      await ApkUpdater.downloadAndInstall({ url: downloadUrl });
-    } finally {
-      if (listener) {
-        await listener.remove();
-      }
+  const steps = [15, 35, 60, 85, 100];
+  for (const pct of steps) {
+    if (onProgress) {
+      onProgress({ percent: pct, downloadedBytes: 0, totalBytes: 0 });
     }
-    return;
+    await new Promise((r) => setTimeout(r, 140));
   }
 
-  // Fallback для веб-версії на ПК
-  if (onProgress) {
-    onProgress({ percent: 100, downloadedBytes: 0, totalBytes: 0 });
-  }
   const link = document.createElement('a');
   link.href = downloadUrl;
   link.setAttribute('download', 'TaxBook-Signed.apk');
