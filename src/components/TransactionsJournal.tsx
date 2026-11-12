@@ -1,18 +1,25 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   Calendar,
+  Copy,
   Edit3,
+  FileSpreadsheet,
   FileText,
+  FileWarning,
   Filter,
+  Image as ImageIcon,
   RotateCcw,
   Search,
   Trash2,
   Undo2,
+  X,
 } from 'lucide-react';
 import {
+  DOCUMENT_STATUS_MAP,
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_MAP,
   TRANSACTION_TYPE_LABELS,
@@ -30,6 +37,11 @@ import {
   formatExpenseDocumentRef,
   roundCurrency,
 } from '../utils/calculations';
+import {
+  loadReceiptImageDataUrl,
+  triggerLightHaptic,
+  triggerWarningHaptic,
+} from '../utils/nativeFeatures';
 import { hasRestrictedAssetKeywords } from '../utils/validation';
 
 interface TransactionsJournalProps {
@@ -37,21 +49,44 @@ interface TransactionsJournalProps {
   selectedYear: number;
   onAddReturnClick?: () => void;
   onEditTransaction: (tx: TaxTransaction) => void;
+  onOpenBankImport?: () => void;
 }
-
-const PAGE_STEP = 25;
 
 export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
   transactions,
   selectedYear,
   onAddReturnClick,
   onEditTransaction,
+  onOpenBankImport,
 }) => {
   const [selectedMonth, setSelectedMonth] = useState<number | 'ALL'>('ALL');
   const [selectedType, setSelectedType] = useState<TransactionType | 'ALL'>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | 'ALL'>('ALL');
+  const [onlyUnconfirmed, setOnlyUnconfirmed] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [visibleCount, setVisibleCount] = useState<number>(PAGE_STEP);
+
+  // Стан для свайп-дій (ID відкритої картки та напрямок: 'LEFT' = видалення, 'RIGHT' = дублювання/редагування)
+  const [swipedState, setSwipedState] = useState<{
+    id: number;
+    dir: 'LEFT' | 'RIGHT';
+  } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; id: number } | null>(null);
+
+  // Стан для перегляду прикріпленого фото чека у картці операції
+  const [viewingReceipt, setViewingReceipt] = useState<{
+    tx: TaxTransaction;
+    dataUrl: string;
+  } | null>(null);
+
+  const unconfirmedCountInYear = useMemo(() => {
+    const yearPrefix = `${selectedYear}-`;
+    return transactions.filter(
+      (tx) =>
+        tx.date?.startsWith(yearPrefix) &&
+        (tx.docStatus === 'pending_counterparty' ||
+          (tx.type === 'EXPENSE' && (!tx.docName || !tx.docNumber)))
+    ).length;
+  }, [transactions, selectedYear]);
 
   const filteredTransactions = useMemo(() => {
     const yearPrefix = `${selectedYear}-`;
@@ -62,7 +97,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
         if (!tx.date || !tx.date.startsWith(yearPrefix)) return false;
 
         if (selectedMonth !== 'ALL') {
-          const monthNum = Number(tx.date.split('-')[1]);
+          const monthNum = tx.month || Number(tx.date.split('-')[1]);
           if (monthNum !== selectedMonth) return false;
         }
 
@@ -74,6 +109,13 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
           if (tx.type !== 'EXPENSE' || tx.expenseCategory !== selectedCategory) {
             return false;
           }
+        }
+
+        if (onlyUnconfirmed) {
+          const isUnconfirmed =
+            tx.docStatus === 'pending_counterparty' ||
+            (tx.type === 'EXPENSE' && (!tx.docName || !tx.docNumber));
+          if (!isUnconfirmed) return false;
         }
 
         if (query) {
@@ -98,7 +140,15 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
         if (dateCmp !== 0) return dateCmp;
         return (b.createdAt || 0) - (a.createdAt || 0);
       });
-  }, [transactions, selectedYear, selectedMonth, selectedType, selectedCategory, searchQuery]);
+  }, [
+    transactions,
+    selectedYear,
+    selectedMonth,
+    selectedType,
+    selectedCategory,
+    onlyUnconfirmed,
+    searchQuery,
+  ]);
 
   const summary = useMemo(() => {
     let income = 0;
@@ -115,24 +165,88 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
     return { income, returns, netIncome, expenses, netProfit };
   }, [filteredTransactions]);
 
-  const visibleTransactions = filteredTransactions.slice(0, visibleCount);
+  // Блок 1.2: Віртуалізація списку транзакцій через @tanstack/react-virtual
+  const parentScrollRef = useRef<HTMLDivElement | null>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredTransactions.length,
+    getScrollElement: () => parentScrollRef.current,
+    estimateSize: () => 136,
+    overscan: 8,
+  });
 
   const handleDelete = async (tx: TaxTransaction) => {
     if (!tx.id) return;
+    await triggerWarningHaptic();
     const confirmed = window.confirm(
       `Видалити операцію від ${formatDateUA(tx.date)} на суму ${formatCurrency(tx.amount)} грн?`
     );
     if (confirmed) {
       await db.transactions.delete(tx.id);
+      setSwipedState(null);
     }
+  };
+
+  // Блок 4.2: Швидке дублювання операції з поточною датою (Свайп вправо)
+  const handleDuplicateToday = async (tx: TaxTransaction) => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const [yrStr, moStr] = todayIso.split('-');
+    const duplicateRecord: TaxTransaction = {
+      ...tx,
+      id: undefined,
+      date: todayIso,
+      docDate: todayIso,
+      year: Number(yrStr) || selectedYear,
+      month: Number(moStr) || 1,
+      createdAt: Date.now(),
+    };
+    await db.transactions.add(duplicateRecord);
+    await triggerLightHaptic();
+    setSwipedState(null);
+  };
+
+  const handleViewReceipt = async (tx: TaxTransaction) => {
+    if (!tx.attachmentPath) return;
+    const dataUrl = await loadReceiptImageDataUrl(tx.attachmentPath);
+    if (dataUrl) {
+      setViewingReceipt({ tx, dataUrl });
+    } else {
+      alert('Локальний файл фото чека не знайдено на пристрої.');
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, id?: number) => {
+    if (!id) return;
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, id };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent, id?: number) => {
+    if (!id || !touchStartRef.current || touchStartRef.current.id !== id) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = Math.abs(touch.clientY - touchStartRef.current.y);
+
+    // Якщо горизонтальний свайп домінує над вертикальним скролом
+    if (Math.abs(dx) > 55 && dy < 45) {
+      if (dx < 0) {
+        // Свайп вліво -> кнопка видалення
+        setSwipedState({ id, dir: 'LEFT' });
+        triggerLightHaptic();
+      } else {
+        // Свайп вправо -> швидке дублювання або редагування
+        setSwipedState({ id, dir: 'RIGHT' });
+        triggerLightHaptic();
+      }
+    }
+    touchStartRef.current = null;
   };
 
   const resetFilters = () => {
     setSelectedMonth('ALL');
     setSelectedType('ALL');
     setSelectedCategory('ALL');
+    setOnlyUnconfirmed(false);
     setSearchQuery('');
-    setVisibleCount(PAGE_STEP);
   };
 
   return (
@@ -224,19 +338,16 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
         </button>
       </div>
 
-      {/* Панель фільтрів та пошуку */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-3 transition-colors duration-200">
-        <div className="flex flex-col md:flex-row gap-3">
+      {/* Панель фільтрів, контролю первинки та імпорту банківської виписки */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl p-3.5 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-3 transition-colors duration-200">
+        <div className="flex flex-col md:flex-row gap-2.5 sm:gap-3">
           {/* Пошук за документом / приміткою */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setVisibleCount(PAGE_STEP);
-              }}
+              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Пошук за назвою або № документа, контрагентом, сумою..."
               className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
@@ -250,7 +361,6 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
               onChange={(e) => {
                 const val = e.target.value;
                 setSelectedMonth(val === 'ALL' ? 'ALL' : Number(val));
-                setVisibleCount(PAGE_STEP);
               }}
               className="w-full sm:w-auto rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
@@ -274,7 +384,6 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
                 if (val !== 'ALL' && val !== 'EXPENSE') {
                   setSelectedCategory('ALL');
                 }
-                setVisibleCount(PAGE_STEP);
               }}
               className="w-full sm:w-auto rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
@@ -289,10 +398,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
           {(selectedType === 'ALL' || selectedType === 'EXPENSE') && (
             <select
               value={selectedCategory}
-              onChange={(e) => {
-                setSelectedCategory(e.target.value as ExpenseCategory | 'ALL');
-                setVisibleCount(PAGE_STEP);
-              }}
+              onChange={(e) => setSelectedCategory(e.target.value as ExpenseCategory | 'ALL')}
               className="w-full sm:w-auto rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
               <option value="ALL">Усі категорії витрат (Гр. 6–9)</option>
@@ -303,27 +409,73 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
               ))}
             </select>
           )}
+        </div>
 
-          {(selectedMonth !== 'ALL' ||
-            selectedType !== 'ALL' ||
-            selectedCategory !== 'ALL' ||
-            searchQuery !== '') && (
+        {/* Другий ряд панелі фільтрів: «Без підтвердження» + «Імпорт виписки з банку» + Підказка свайпів */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Блок 2.3: Перемикач «Без підтвердження» */}
             <button
               type="button"
-              onClick={resetFilters}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center gap-1.5"
+              onClick={() => setOnlyUnconfirmed((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all active:scale-[0.98] ${
+                onlyUnconfirmed
+                  ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                  : 'bg-amber-50/70 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/80 hover:bg-amber-100'
+              }`}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Скинути</span>
+              <FileWarning className="w-3.5 h-3.5 shrink-0" />
+              <span>Без підтвердження</span>
+              {unconfirmedCountInYear > 0 && (
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                    onlyUnconfirmed
+                      ? 'bg-white text-amber-800'
+                      : 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200'
+                  }`}
+                >
+                  {unconfirmedCountInYear}
+                </span>
+              )}
             </button>
-          )}
+
+            {/* Блок 4.3: Кнопка «Імпорт виписки з банку» */}
+            {onOpenBankImport && (
+              <button
+                type="button"
+                onClick={onOpenBankImport}
+                className="px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800/80 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-[0.98]"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                <span>Імпорт виписки з банку (CSV / XLSX)</span>
+              </button>
+            )}
+
+            {(selectedMonth !== 'ALL' ||
+              selectedType !== 'ALL' ||
+              selectedCategory !== 'ALL' ||
+              onlyUnconfirmed ||
+              searchQuery !== '') && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Скинути</span>
+              </button>
+            )}
+          </div>
+
+          <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium hidden sm:inline">
+            Жести на картці: свайп вправо — дублювати, свайп вліво — видалити
+          </span>
         </div>
       </div>
 
-      {/* Таблиця журналу операцій */}
+      {/* Віртуалізований список операцій Журналу (@tanstack/react-virtual) */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-hidden transition-colors duration-200">
         {filteredTransactions.length === 0 ? (
-          /* Порожній стан журналу (Empty State — без дублюючої кнопки «+ Додати операцію») */
           <div className="p-10 text-center space-y-2.5">
             <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-900 text-slate-400 flex items-center justify-center mx-auto">
               <FileText className="w-6 h-6" />
@@ -332,77 +484,157 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
               Записів за обраними критеріями не знайдено
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-              Скористайтеся центральною кнопкою «+» на нижній панелі для внесення нової операції доходу, витрати чи повернення.
+              Скористайтеся центральною кнопкою «+» на нижній панелі для внесення нової операції або імпортуйте виписку з банку.
             </p>
           </div>
         ) : (
-          <>
-            {/* Десктопна таблиця */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    <th className="py-3 px-4">Дата (Гр. 1)</th>
-                    <th className="py-3 px-4">Тип / Графа</th>
-                    <th className="py-3 px-4">Первинний документ (Гр. 5)</th>
-                    <th className="py-3 px-4">Примітка / Контрагент</th>
-                    <th className="py-3 px-4 text-right">Сума (грн)</th>
-                    <th className="py-3 px-4 text-right">Дії</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-700/70 text-sm">
-                  {visibleTransactions.map((tx) => {
-                    const typeInfo = TRANSACTION_TYPE_LABELS[tx.type];
-                    const catInfo = tx.expenseCategory
-                      ? EXPENSE_CATEGORY_MAP[tx.expenseCategory]
-                      : null;
-                    const docFormatted = formatExpenseDocumentRef(tx);
-                    const restrictedWarn = hasRestrictedAssetKeywords(tx.note, tx.docName);
+          <div
+            ref={parentScrollRef}
+            className="max-h-[68dvh] overflow-y-auto overscroll-contain"
+          >
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const tx = filteredTransactions[virtualRow.index];
+                if (!tx) return null;
 
-                    return (
-                      <tr
-                        key={tx.id}
-                        className="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors"
-                      >
-                        <td className="py-3 px-4 font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                          {formatDateUA(tx.date)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex flex-col items-start gap-1">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${typeInfo.bgClass}`}
-                            >
-                              {typeInfo.shortLabel} ({typeInfo.colLabel})
-                            </span>
-                            {catInfo && (
-                              <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${catInfo.badgeColor}`}
-                              >
-                                {catInfo.shortTitle}
-                              </span>
+                const typeInfo = TRANSACTION_TYPE_LABELS[tx.type];
+                const catInfo = tx.expenseCategory
+                  ? EXPENSE_CATEGORY_MAP[tx.expenseCategory]
+                  : null;
+                const docFormatted = formatExpenseDocumentRef(tx);
+                const restrictedWarn = hasRestrictedAssetKeywords(tx.note, tx.docName);
+                const statusInfo =
+                  DOCUMENT_STATUS_MAP[tx.docStatus || 'original'] ||
+                  DOCUMENT_STATUS_MAP.original;
+
+                const isSwipedLeft =
+                  swipedState?.id === tx.id && swipedState?.dir === 'LEFT';
+                const isSwipedRight =
+                  swipedState?.id === tx.id && swipedState?.dir === 'RIGHT';
+
+                return (
+                  <div
+                    key={tx.id ?? virtualRow.index}
+                    data-index={virtualRow.index}
+                    ref={rowVirtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    className="border-b border-slate-200 dark:border-slate-700/70 overflow-hidden"
+                  >
+                    <div
+                      onTouchStart={(e) => handleTouchStart(e, tx.id)}
+                      onTouchEnd={(e) => handleTouchEnd(e, tx.id)}
+                      className="relative bg-white dark:bg-slate-800 p-3.5 sm:px-5 sm:py-3.5 transition-all hover:bg-slate-50/70 dark:hover:bg-slate-700/30"
+                    >
+                      {/* Оверлей свайп-дій (Свайп вліво -> Видалення, Свайп вправо -> Дублювання / Редагування) */}
+                      {(isSwipedLeft || isSwipedRight) && (
+                        <div
+                          className={`mb-2.5 p-2 rounded-xl flex items-center justify-between gap-2 animate-fade-in ${
+                            isSwipedLeft
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-blue-600 text-white'
+                          }`}
+                        >
+                          <span className="text-xs font-bold px-1">
+                            {isSwipedLeft
+                              ? 'Підтвердити видалення запису?'
+                              : 'Швидка дія з операцією:'}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {isSwipedRight && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDuplicateToday(tx)}
+                                  className="px-2.5 py-1 rounded-lg bg-white text-blue-900 text-xs font-extrabold flex items-center gap-1 shadow-2xs"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Дублювати сьогодні</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSwipedState(null);
+                                    onEditTransaction(tx);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-blue-800 text-white text-xs font-bold flex items-center gap-1"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <span>Редагувати</span>
+                                </button>
+                              </>
                             )}
+                            {isSwipedLeft && (
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(tx)}
+                                className="px-3 py-1 rounded-lg bg-white text-rose-700 text-xs font-extrabold flex items-center gap-1 shadow-2xs"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Видалити</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSwipedState(null)}
+                              className="p-1 rounded-lg bg-black/20 text-white hover:bg-black/30"
+                              aria-label="Закрити панель свайпу"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
                           </div>
-                        </td>
-                        <td className="py-3 px-4 text-slate-800 dark:text-slate-200">
-                          {docFormatted ? (
-                            <span className="font-medium">{docFormatted}</span>
-                          ) : (
-                            <span className="text-slate-400 text-xs italic">Не вказано</span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 bg-slate-100 dark:bg-slate-900 px-2.5 py-0.5 rounded-md">
+                            {formatDateUA(tx.date)}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${typeInfo.bgClass}`}
+                          >
+                            {typeInfo.shortLabel} ({typeInfo.colLabel})
+                          </span>
+                          {catInfo && (
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${catInfo.badgeColor}`}
+                            >
+                              {catInfo.shortTitle}
+                            </span>
                           )}
-                        </td>
-                        <td className="py-3 px-4 text-slate-600 dark:text-slate-300 max-w-xs">
-                          <div className="truncate" title={tx.note}>
-                            {tx.note || '—'}
-                          </div>
-                          {restrictedWarn && (
-                            <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md font-medium">
-                              <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
-                              <span>Обмеження пп. 177.4.6 ПКУ</span>
-                            </div>
+                          {/* Індикатор статусу первинного документа (Блок 2.3) */}
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${statusInfo.badgeClass}`}
+                          >
+                            {statusInfo.shortLabel}
+                          </span>
+                          {/* Кнопка перегляду фото чека (Блок 3.1) */}
+                          {tx.attachmentPath && (
+                            <button
+                              type="button"
+                              onClick={() => handleViewReceipt(tx)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100"
+                            >
+                              <ImageIcon className="w-3 h-3" />
+                              <span>Фото чека</span>
+                            </button>
                           )}
-                        </td>
-                        <td
-                          className={`py-3 px-4 text-right font-extrabold whitespace-nowrap ${
+                        </div>
+
+                        <div
+                          className={`text-base sm:text-lg font-extrabold whitespace-nowrap ${
                             tx.type === 'INCOME'
                               ? 'text-emerald-700 dark:text-emerald-400'
                               : tx.type === 'RETURN'
@@ -411,136 +643,113 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
                           }`}
                         >
                           {tx.type === 'INCOME' ? '+' : '−'}
-                          {formatCurrency(tx.amount)}
-                        </td>
-                        <td className="py-3 px-4 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => onEditTransaction(tx)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors"
-                              title="Редагувати"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(tx)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-700 transition-colors"
-                              title="Видалити"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          {formatCurrency(tx.amount)} ₴
+                        </div>
+                      </div>
 
-            {/* Мобільний список карток */}
-            <div className="md:hidden divide-y divide-slate-200 dark:divide-slate-700/70">
-              {visibleTransactions.map((tx) => {
-                const typeInfo = TRANSACTION_TYPE_LABELS[tx.type];
-                const catInfo = tx.expenseCategory
-                  ? EXPENSE_CATEGORY_MAP[tx.expenseCategory]
-                  : null;
-                const docFormatted = formatExpenseDocumentRef(tx);
-                const restrictedWarn = hasRestrictedAssetKeywords(tx.note, tx.docName);
+                      <div className="mt-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="space-y-1 min-w-0 flex-1">
+                          {docFormatted ? (
+                            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                              <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate">{docFormatted}</span>
+                            </div>
+                          ) : (
+                            <div className="text-xs italic text-amber-600 dark:text-amber-400">
+                              Реквізити первинного документа не вказані
+                            </div>
+                          )}
 
-                return (
-                  <div
-                    key={tx.id}
-                    className="p-3.5 space-y-2 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-700/30"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded-md">
-                          {formatDateUA(tx.date)}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${typeInfo.bgClass}`}
-                        >
-                          {typeInfo.shortLabel}
-                        </span>
-                        {catInfo && (
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${catInfo.badgeColor}`}
+                          {tx.note && (
+                            <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                              {tx.note}
+                            </div>
+                          )}
+
+                          {restrictedWarn && (
+                            <div className="inline-flex items-center gap-1.5 text-[11px] text-amber-900 bg-amber-100 px-2.5 py-1 rounded-lg font-medium">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>Увага: обмеження пп. 177.4.6 ПКУ!</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Кнопки швидких дій (Дублювати / Редагувати / Видалити) */}
+                        <div className="flex items-center justify-end gap-1.5 shrink-0 pt-1 sm:pt-0">
+                          <button
+                            type="button"
+                            onClick={() => handleDuplicateToday(tx)}
+                            className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1"
+                            title="Швидке дублювання з поточною датою"
                           >
-                            {catInfo.shortTitle}
-                          </span>
-                        )}
+                            <Copy className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />
+                            <span className="hidden sm:inline">Дублювати</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onEditTransaction(tx)}
+                            className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Редагувати</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(tx)}
+                            className="px-2.5 py-1 rounded-lg border border-rose-200 dark:border-rose-800/60 text-xs font-medium text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Видалити</span>
+                          </button>
+                        </div>
                       </div>
-                      <div
-                        className={`text-base font-extrabold whitespace-nowrap ${
-                          tx.type === 'INCOME'
-                            ? 'text-emerald-700 dark:text-emerald-400'
-                            : tx.type === 'RETURN'
-                            ? 'text-amber-700 dark:text-amber-400'
-                            : 'text-rose-700 dark:text-rose-400'
-                        }`}
-                      >
-                        {tx.type === 'INCOME' ? '+' : '−'}
-                        {formatCurrency(tx.amount)} ₴
-                      </div>
-                    </div>
-
-                    {docFormatted && (
-                      <div className="text-xs font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>{docFormatted}</span>
-                      </div>
-                    )}
-
-                    {tx.note && (
-                      <div className="text-xs text-slate-600 dark:text-slate-300">{tx.note}</div>
-                    )}
-
-                    {restrictedWarn && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-amber-900 bg-amber-100 p-2 rounded-lg font-medium">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span>Увага: обмеження пп. 177.4.6 ПКУ!</span>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => onEditTransaction(tx)}
-                        className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" /> Редагувати
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(tx)}
-                        className="px-2.5 py-1 rounded-lg border border-rose-200 dark:border-rose-800/60 text-xs font-medium text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 flex items-center gap-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Видалити
-                      </button>
                     </div>
                   </div>
                 );
               })}
             </div>
-
-            {/* Пагінація / Підвантаження */}
-            {visibleCount < filteredTransactions.length && (
-              <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 text-center">
-                <button
-                  type="button"
-                  onClick={() => setVisibleCount((prev) => prev + PAGE_STEP)}
-                  className="px-5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 shadow-2xs transition-colors"
-                >
-                  Показати ще ({filteredTransactions.length - visibleCount} залишилось)
-                </button>
-              </div>
-            )}
-          </>
+          </div>
         )}
       </div>
+
+      {/* Модальне вікно перегляду прикріпленого фото чека */}
+      {viewingReceipt && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/85 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setViewingReceipt(null)}
+        >
+          <div
+            className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+              <div className="min-w-0">
+                <div className="text-xs sm:text-sm font-bold truncate">
+                  {formatExpenseDocumentRef(viewingReceipt.tx) || 'Фото первинного документа'}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Сума: {formatCurrency(viewingReceipt.tx.amount)} грн •{' '}
+                  {formatDateUA(viewingReceipt.tx.date)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingReceipt(null)}
+                className="p-1 rounded-lg text-slate-300 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-slate-100 dark:bg-slate-950 max-h-[75dvh] overflow-auto">
+              <img
+                src={viewingReceipt.dataUrl}
+                alt="Фото чека"
+                className="max-w-full max-h-[70dvh] rounded-xl object-contain shadow-md"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

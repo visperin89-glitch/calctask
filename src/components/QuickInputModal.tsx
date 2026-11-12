@@ -1,22 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Briefcase,
   Calendar,
+  Camera as CameraIcon,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  FileCheck2,
   FileText,
   Hash,
+  Image as ImageIcon,
   Info,
   Plus,
   PlusCircle,
   Save,
+  Sparkles,
+  Trash2,
   X,
 } from 'lucide-react';
 import {
   ATTORNEY_EXPENSE_TEMPLATES,
   type AttorneyExpenseTemplate,
+  DEFAULT_OPERATION_PRESETS,
+  DOCUMENT_STATUS_OPTIONS,
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_MAP,
   QUICK_DOC_NAMES,
@@ -26,11 +33,20 @@ import {
 } from '../constants/taxConstants';
 import { db } from '../db/database';
 import type {
+  DocumentStatus,
   ExpenseCategory,
+  QuickOperationPreset,
   TaxProfile,
   TaxTransaction,
   TransactionType,
 } from '../types/tax';
+import {
+  captureOrPickReceiptPhoto,
+  loadReceiptImageDataUrl,
+  saveReceiptFromFile,
+  triggerLightHaptic,
+} from '../utils/nativeFeatures';
+import { isNativeApp } from '../utils/nativePlatform';
 import { hasRestrictedAssetKeywords, validateTransaction } from '../utils/validation';
 
 interface QuickInputModalProps {
@@ -62,12 +78,25 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
   const [docName, setDocName] = useState<string>('Банківська виписка (гонорар)');
   const [docNumber, setDocNumber] = useState<string>('');
   const [docDate, setDocDate] = useState<string>(todayIso);
+  const [docStatus, setDocStatus] = useState<DocumentStatus>('original');
+  const [attachmentPath, setAttachmentPath] = useState<string | undefined>(undefined);
+  const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState<string | null>(null);
+  const [isReceiptViewerOpen, setIsReceiptViewerOpen] = useState<boolean>(false);
+
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory>('col_9');
   const [selectedAttorneyTemplateId, setSelectedAttorneyTemplateId] = useState<string>('');
+  const [activePresetId, setActivePresetId] = useState<string>('');
   const [isAttorneyDirectoryOpen, setIsAttorneyDirectoryOpen] = useState<boolean>(false);
   const [note, setNote] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  const filePhotoInputRef = useRef<HTMLInputElement | null>(null);
+
+  const quickPresets: QuickOperationPreset[] =
+    Array.isArray(profile.customPresets) && profile.customPresets.length > 0
+      ? profile.customPresets
+      : DEFAULT_OPERATION_PRESETS;
 
   useEffect(() => {
     if (editingTransaction) {
@@ -77,11 +106,22 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
       setDocName(editingTransaction.docName || '');
       setDocNumber(editingTransaction.docNumber || '');
       setDocDate(editingTransaction.docDate || editingTransaction.date);
+      setDocStatus(editingTransaction.docStatus || 'original');
+      setAttachmentPath(editingTransaction.attachmentPath);
       setExpenseCategory(editingTransaction.expenseCategory || 'col_9');
       setSelectedAttorneyTemplateId('');
+      setActivePresetId('');
       setIsAttorneyDirectoryOpen(false);
       setNote(editingTransaction.note || '');
       setErrors({});
+
+      if (editingTransaction.attachmentPath) {
+        loadReceiptImageDataUrl(editingTransaction.attachmentPath)
+          .then((url) => setAttachmentPreviewUrl(url))
+          .catch(() => setAttachmentPreviewUrl(null));
+      } else {
+        setAttachmentPreviewUrl(null);
+      }
     } else if (presetAttorneyTemplate) {
       const initDate = defaultDate || new Date().toISOString().slice(0, 10);
       setType('EXPENSE');
@@ -90,8 +130,12 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
       setDocName(presetAttorneyTemplate.defaultDocName);
       setDocNumber('');
       setDocDate(initDate);
+      setDocStatus('original');
+      setAttachmentPath(undefined);
+      setAttachmentPreviewUrl(null);
       setExpenseCategory(presetAttorneyTemplate.category);
       setSelectedAttorneyTemplateId(presetAttorneyTemplate.id);
+      setActivePresetId('');
       setIsAttorneyDirectoryOpen(false);
       setNote(presetAttorneyTemplate.fullText);
       setErrors({});
@@ -104,8 +148,12 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
       setDocName(QUICK_DOC_NAMES[initType][0]);
       setDocNumber('');
       setDocDate(initDate);
+      setDocStatus('original');
+      setAttachmentPath(undefined);
+      setAttachmentPreviewUrl(null);
       setExpenseCategory('col_9');
       setSelectedAttorneyTemplateId('');
+      setActivePresetId('');
       setIsAttorneyDirectoryOpen(false);
       setNote('');
       setErrors({});
@@ -116,6 +164,7 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
 
   const handleTypeChange = (newType: TransactionType) => {
     setType(newType);
+    setActivePresetId('');
     setErrors({});
     if (!editingTransaction) {
       const defaultDocs = QUICK_DOC_NAMES[newType];
@@ -132,7 +181,22 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
     }
   };
 
-  const handleApplyAttorneyTemplate = (tpl: AttorneyExpenseTemplate) => {
+  // Блок 4.1: Застосування швидкого пресету повторюваної операції
+  const handleApplyQuickPreset = async (preset: QuickOperationPreset) => {
+    setActivePresetId(preset.id);
+    setType(preset.type || 'EXPENSE');
+    setExpenseCategory(preset.category);
+    setDocName(preset.defaultDocName);
+    setNote(preset.defaultNote);
+    setErrors((prev) => ({
+      ...prev,
+      expenseCategory: '',
+      docName: '',
+    }));
+    await triggerLightHaptic();
+  };
+
+  const handleApplyAttorneyTemplate = async (tpl: AttorneyExpenseTemplate) => {
     setSelectedAttorneyTemplateId(tpl.id);
     setExpenseCategory(tpl.category);
     setDocName(tpl.defaultDocName);
@@ -143,6 +207,39 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
       expenseCategory: '',
       docName: '',
     }));
+    await triggerLightHaptic();
+  };
+
+  // Блок 3.1: Фотофіксація чека / первинного документа
+  const handleCaptureReceipt = async (sourceMode: 'CAMERA' | 'PHOTOS') => {
+    if (!isNativeApp() && sourceMode === 'PHOTOS') {
+      filePhotoInputRef.current?.click();
+      return;
+    }
+    try {
+      const res = await captureOrPickReceiptPhoto(sourceMode);
+      setAttachmentPath(res.attachmentPath);
+      setAttachmentPreviewUrl(res.previewDataUrl);
+    } catch {
+      // Fallback до системного вибору файлу/камери у WebView
+      filePhotoInputRef.current?.click();
+    }
+  };
+
+  const handleFilePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const res = await saveReceiptFromFile(file);
+      setAttachmentPath(res.attachmentPath);
+      setAttachmentPreviewUrl(res.previewDataUrl);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Не вдалося прикріпити зображення.');
+    } finally {
+      if (filePhotoInputRef.current) {
+        filePhotoInputRef.current.value = '';
+      }
+    }
   };
 
   const showRestrictedWarning = hasRestrictedAssetKeywords(note, docName);
@@ -150,15 +247,21 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedAmount = parseFloat(amountStr.replace(',', '.'));
+    const [yearPart, monthPart] = (date || '').split('-');
 
     const candidate: Partial<TaxTransaction> = {
       date,
+      year: Number(yearPart) || new Date().getFullYear(),
+      month: Number(monthPart) || 1,
       type,
       amount: normalizedAmount,
       docName: docName.trim(),
       docNumber: docNumber.trim(),
       docDate: docDate || date,
+      docStatus,
+      attachmentPath,
       expenseCategory: type === 'EXPENSE' ? expenseCategory : undefined,
+      category: type === 'EXPENSE' ? expenseCategory : '',
       note: note.trim() || undefined,
       createdAt: editingTransaction?.createdAt || Date.now(),
     };
@@ -176,6 +279,7 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
       } else {
         await db.transactions.add(candidate as TaxTransaction);
       }
+      await triggerLightHaptic();
       onSaved?.();
       onClose();
     } finally {
@@ -204,8 +308,49 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
           </button>
         </div>
 
-        {/* Тіло форми (mobile-first, прокручується всередині модалки) */}
+        {/* Тіло форми */}
         <form onSubmit={handleSubmit} className="flex-1 p-3.5 sm:p-5 space-y-3.5 overflow-y-auto">
+          {/* БЛОК 4.1: Горизонтальна стрічка швидких пресетів повторюваних операцій */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Швидкі шаблони операцій (пресети)</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+              {quickPresets.map((preset) => {
+                const isSelected = activePresetId === preset.id;
+                const catInfo = EXPENSE_CATEGORY_MAP[preset.category];
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handleApplyQuickPreset(preset)}
+                    className={`shrink-0 px-3 py-1.5 rounded-xl border text-left transition-all duration-150 active:scale-[0.97] flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-slate-50 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                    }`}
+                  >
+                    <span className="text-xs font-bold whitespace-nowrap">{preset.title}</span>
+                    {catInfo && (
+                      <span
+                        className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold ${
+                          isSelected
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        Гр.{catInfo.colNumber}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Індикатор ПДВ (п. 2 розд. II Порядку № 261) */}
           {profile.isVatPayer && (
             <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 text-xs font-medium">
@@ -248,7 +393,11 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                     className={`py-2 px-1.5 rounded-xl border text-center transition-all duration-200 active:scale-[0.98] flex flex-col items-center justify-center ${activeStyle}`}
                   >
                     <span className="text-xs sm:text-sm font-bold">{info.shortLabel}</span>
-                    <span className={`text-[10px] ${active ? 'text-white/85' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <span
+                      className={`text-[10px] ${
+                        active ? 'text-white/85' : 'text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
                       {info.colLabel}
                     </span>
                   </button>
@@ -286,7 +435,9 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                   UAH
                 </span>
               </div>
-              {errors.amount && <p className="mt-1 text-xs text-rose-600 font-medium">{errors.amount}</p>}
+              {errors.amount && (
+                <p className="mt-1 text-xs text-rose-600 font-medium">{errors.amount}</p>
+              )}
             </div>
 
             <div>
@@ -310,7 +461,7 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
           {/* Довідник дозволених витрат адвоката (ст. 178 ПКУ) + Категорія витрат (Графи 6–9) */}
           {type === 'EXPENSE' && (
             <div className="space-y-3 animate-fade-in">
-              {/* Розгортаємий акордеон: Довідник дозволених витрат адвоката (повна назва без скорочень) */}
+              {/* Розгортаємий акордеон: Довідник дозволених витрат адвоката */}
               <div className="rounded-2xl border border-indigo-200 dark:border-indigo-800/70 bg-indigo-50/60 dark:bg-indigo-950/30 overflow-hidden transition-all duration-200">
                 <button
                   type="button"
@@ -348,7 +499,9 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                         <div
                           key={item.id}
                           className={`py-2.5 first:pt-0 last:pb-0 flex flex-col gap-2 ${
-                            isSelected ? 'bg-indigo-50/50 dark:bg-indigo-950/40 -mx-2 px-2 rounded-xl' : ''
+                            isSelected
+                              ? 'bg-indigo-50/50 dark:bg-indigo-950/40 -mx-2 px-2 rounded-xl'
+                              : ''
                           }`}
                         >
                           <div className="space-y-1">
@@ -406,7 +559,9 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                       >
                         <div
                           className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                            isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-400'
+                            isSelected
+                              ? 'border-blue-600 bg-blue-600 text-white'
+                              : 'border-slate-400'
                           }`}
                         >
                           {isSelected && <CheckCircle2 className="w-3 h-3" />}
@@ -430,12 +585,14 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
             </div>
           )}
 
-          {/* Блок реквізитів первинного документа */}
+          {/* Блок реквізитів первинного документа + Статус первинки (Блок 2.3) + Фотофіксація (Блок 3.1) */}
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <span>Первинний документ {type === 'EXPENSE' ? '(Графа 5 — обов’язково *)' : '(опціонально)'}</span>
+                <span>
+                  Первинний документ {type === 'EXPENSE' ? '(Графа 5 — обов’язково *)' : '(опціонально)'}
+                </span>
               </span>
             </div>
 
@@ -478,7 +635,9 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                     : 'border-slate-300 dark:border-slate-700 focus:ring-blue-600'
                 }`}
               />
-              {errors.docName && <p className="mt-1 text-xs text-rose-600 font-medium">{errors.docName}</p>}
+              {errors.docName && (
+                <p className="mt-1 text-xs text-rose-600 font-medium">{errors.docName}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -531,6 +690,123 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                 )}
               </div>
             </div>
+
+            {/* БЛОК 2.3: Контроль наявності первинних документів */}
+            <div className="pt-1 border-t border-slate-200/80 dark:border-slate-700/70">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5 flex items-center gap-1">
+                <FileCheck2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Статус первинного документа</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                {DOCUMENT_STATUS_OPTIONS.map((opt) => {
+                  const selected = docStatus === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setDocStatus(opt.id)}
+                      className={`py-2 px-2.5 rounded-xl border text-xs font-bold transition-all text-center ${
+                        selected
+                          ? `${opt.badgeClass} ring-2 ring-blue-500/60`
+                          : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* БЛОК 3.1: Фотофіксація первинних документів (Камера / Галерея) */}
+            <div className="pt-1 border-t border-slate-200/80 dark:border-slate-700/70 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                  <CameraIcon className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />
+                  <span>Прикріпити фото чека / документа</span>
+                </span>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleCaptureReceipt('CAMERA')}
+                    className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1 shadow-2xs"
+                  >
+                    <CameraIcon className="w-3.5 h-3.5" />
+                    <span>Зробити фото</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCaptureReceipt('PHOTOS')}
+                    className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>З галереї</span>
+                  </button>
+                  <input
+                    ref={filePhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFilePhotoSelected}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+
+              {attachmentPath && (
+                <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800/80">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {attachmentPreviewUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsReceiptViewerOpen(true)}
+                        className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0"
+                      >
+                        <img
+                          src={attachmentPreviewUrl}
+                          alt="Фото документа"
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center shrink-0">
+                        <ImageIcon className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300 truncate">
+                        Фото чека / документа прикріплено
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                        Локальне сховище: {attachmentPath}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {attachmentPreviewUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setIsReceiptViewerOpen(true)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200"
+                      >
+                        Переглянути
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachmentPath(undefined);
+                        setAttachmentPreviewUrl(null);
+                      }}
+                      className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+                      title="Видалити фото"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Деталі операції / Контрагент */}
@@ -567,6 +843,37 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Повноекранний перегляд фото чека */}
+      {isReceiptViewerOpen && attachmentPreviewUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setIsReceiptViewerOpen(false)}
+        >
+          <div
+            className="relative max-w-2xl w-full bg-slate-900 rounded-2xl overflow-hidden border border-slate-700 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-950 text-white">
+              <span className="text-xs font-bold">Фото первинного документа ({docName})</span>
+              <button
+                type="button"
+                onClick={() => setIsReceiptViewerOpen(false)}
+                className="p-1 rounded-lg text-slate-300 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-3 flex items-center justify-center max-h-[80dvh] overflow-auto">
+              <img
+                src={attachmentPreviewUrl}
+                alt="Первинний документ"
+                className="max-w-full max-h-[75dvh] rounded-xl object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { App as CapApp } from '@capacitor/app';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   ArrowDownRight,
@@ -8,6 +9,8 @@ import {
   Calendar,
   Download,
   FileSpreadsheet,
+  Fingerprint,
+  Lock,
   Moon,
   Plus,
   PlusCircle,
@@ -17,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { AnnualReportView } from './components/AnnualReportView';
+import { BankStatementImportModal } from './components/BankStatementImportModal';
 import { FixedAssetsRegistry } from './components/FixedAssetsRegistry';
 import { QuickInputModal } from './components/QuickInputModal';
 import { SettingsView } from './components/SettingsView';
@@ -34,8 +38,10 @@ import {
   formatMegabytes,
   type UpdateCheckResult,
 } from './utils/appUpdater';
+import { verifyBiometricIdentity } from './utils/nativeFeatures';
 import {
   hideNativeSplashScreen,
+  isNativeApp,
   registerAndroidBackButton,
 } from './utils/nativePlatform';
 import {
@@ -54,11 +60,16 @@ export const App: React.FC = () => {
 
   const [isActionSheetOpen, setIsActionSheetOpen] = useState<boolean>(false);
   const [isQuickModalOpen, setIsQuickModalOpen] = useState<boolean>(false);
+  const [isBankImportModalOpen, setIsBankImportModalOpen] = useState<boolean>(false);
   const [editingTransaction, setEditingTransaction] = useState<TaxTransaction | null>(null);
   const [presetAttorneyTemplate, setPresetAttorneyTemplate] =
     useState<AttorneyExpenseTemplate | null>(null);
   const [presetTransactionType, setPresetTransactionType] = useState<TransactionType | null>(null);
   const [openAssetModalKey, setOpenAssetModalKey] = useState<number>(0);
+
+  // Стан біометричного блокування (Блок 3.2)
+  const [isBiometricLocked, setIsBiometricLocked] = useState<boolean>(false);
+  const [biometricError, setBiometricError] = useState<string | null>(null);
 
   const [availableUpdate, setAvailableUpdate] = useState<UpdateCheckResult | null>(null);
   const [isDownloadingModalApk, setIsDownloadingModalApk] = useState<boolean>(false);
@@ -73,7 +84,16 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     ensureDefaultProfile()
-      .then(() => hideNativeSplashScreen())
+      .then(async (prof) => {
+        await hideNativeSplashScreen();
+        if (prof.biometricEnabled) {
+          setIsBiometricLocked(true);
+          const ok = await verifyBiometricIdentity();
+          if (ok) {
+            setIsBiometricLocked(false);
+          }
+        }
+      })
       .catch(console.error);
 
     checkForAppUpdate()
@@ -85,11 +105,39 @@ export const App: React.FC = () => {
       .catch(() => {});
   }, []);
 
+  const profile =
+    useLiveQuery(() => db.profile.get('default'), [], DEFAULT_PROFILE) || DEFAULT_PROFILE;
+  const transactions = useLiveQuery(() => db.transactions.toArray(), [], []) || [];
+  const fixedAssets = useLiveQuery(() => db.fixedAssets.toArray(), [], []) || [];
+
+  // Блок 3.2: Перевірка біометрії при поверненні додатку з фонового режиму
+  useEffect(() => {
+    if (!isNativeApp() || !profile.biometricEnabled) return;
+
+    const listenerPromise = CapApp.addListener('appStateChange', async ({ isActive }) => {
+      if (isActive && profile.biometricEnabled) {
+        setIsBiometricLocked(true);
+        const ok = await verifyBiometricIdentity();
+        if (ok) {
+          setIsBiometricLocked(false);
+        }
+      }
+    });
+
+    return () => {
+      listenerPromise.then((h) => h.remove()).catch(() => {});
+    };
+  }, [profile.biometricEnabled]);
+
   // Обробка апаратної кнопки «Назад» на Android (@capacitor/app)
   useEffect(() => {
     return registerAndroidBackButton(() => {
       if (isActionSheetOpen) {
         setIsActionSheetOpen(false);
+        return true;
+      }
+      if (isBankImportModalOpen) {
+        setIsBankImportModalOpen(false);
         return true;
       }
       if (isQuickModalOpen) {
@@ -102,12 +150,7 @@ export const App: React.FC = () => {
       }
       return false;
     });
-  }, [isActionSheetOpen, isQuickModalOpen, activeTab]);
-
-  const profile =
-    useLiveQuery(() => db.profile.get('default'), [], DEFAULT_PROFILE) || DEFAULT_PROFILE;
-  const transactions = useLiveQuery(() => db.transactions.toArray(), [], []) || [];
-  const fixedAssets = useLiveQuery(() => db.fixedAssets.toArray(), [], []) || [];
+  }, [isActionSheetOpen, isBankImportModalOpen, isQuickModalOpen, activeTab]);
 
   const availableYears = Array.from({ length: 8 }, (_, idx) => currentYear + 1 - idx).filter(
     (y) => y >= 2021
@@ -127,11 +170,29 @@ export const App: React.FC = () => {
     setOpenAssetModalKey((prev) => prev + 1);
   };
 
+  const handleOpenBankStatementImport = () => {
+    setIsActionSheetOpen(false);
+    setActiveTab('JOURNAL');
+    setIsBankImportModalOpen(true);
+  };
+
   const handleEditTransaction = (tx: TaxTransaction) => {
     setEditingTransaction(tx);
     setPresetAttorneyTemplate(null);
     setPresetTransactionType(null);
     setIsQuickModalOpen(true);
+  };
+
+  const handleBiometricUnlock = async () => {
+    setBiometricError(null);
+    const ok = await verifyBiometricIdentity();
+    if (ok) {
+      setIsBiometricLocked(false);
+    } else {
+      setBiometricError(
+        'Не вдалося підтвердити особу. Спробуйте ще раз прикласти палець до сканера.'
+      );
+    }
   };
 
   const handleStartModalInstall = async (url: string) => {
@@ -154,6 +215,38 @@ export const App: React.FC = () => {
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
+
+  // Блок 3.2: Екран блокування із запитом нативної біометричної автентифікації
+  if (isBiometricLocked) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-950 text-white p-6">
+        <div className="w-full max-w-sm bg-slate-900 rounded-3xl border border-slate-800 p-6 text-center space-y-5 shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-600/30">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="text-lg font-extrabold">Книга обліку заблокована</h1>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Підтвердіть особу за допомогою відбитка пальця або Face ID для доступу до фінансових даних.
+            </p>
+          </div>
+          {biometricError && (
+            <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-800 text-xs text-rose-200 font-medium">
+              {biometricError}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleBiometricUnlock}
+            className="w-full py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98]"
+          >
+            <Fingerprint className="w-5 h-5" />
+            <span>Розблокувати за біометрією</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 safe-main-bottom md:pb-8 transition-colors duration-200 print:bg-white print:pb-0">
@@ -301,6 +394,7 @@ export const App: React.FC = () => {
             selectedYear={selectedYear}
             onAddReturnClick={() => handleOpenNewTransaction('RETURN')}
             onEditTransaction={handleEditTransaction}
+            onOpenBankImport={handleOpenBankStatementImport}
           />
         )}
 
@@ -335,7 +429,7 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* ActionSheet меню центральної кнопки «+» (2 варіанти: Додати операцію / Додати об'єкт ОЗ / НА) */}
+      {/* ActionSheet меню центральної кнопки «+» (Додати операцію / Додати об'єкт ОЗ / Імпорт виписки з банку) */}
       {isActionSheetOpen && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/70 p-3 sm:p-4 print:hidden animate-fade-in"
@@ -398,6 +492,25 @@ export const App: React.FC = () => {
               </div>
             </button>
 
+            {/* 3. Імпорт виписки з банку (CSV / XLSX) — Блок 4.3 */}
+            <button
+              type="button"
+              onClick={handleOpenBankStatementImport}
+              className="w-full p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700/80 hover:border-emerald-400 flex items-center gap-3.5 text-left transition-all duration-200 active:scale-[0.98]"
+            >
+              <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-extrabold text-slate-900 dark:text-white">
+                  Імпорт виписки з банку
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                  ПриватБанк, Монобанк або універсальний CSV / XLSX
+                </div>
+              </div>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsActionSheetOpen(false)}
@@ -447,14 +560,14 @@ export const App: React.FC = () => {
             )}
 
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              Натисніть <strong>«Завантажити та встановити»</strong> — оновлення завантажиться прямо всередині додатку й автоматично відкриє системне вікно встановлення Android.
+              Натисніть <strong>«Завантажити та встановити»</strong> — оновлення завантажиться на пристрій для встановлення.
             </p>
 
             {isDownloadingModalApk && modalDownloadProgress && (
               <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-emerald-900 dark:text-emerald-200">
                   <span>
-                    Завантаження у додатку:{' '}
+                    Завантаження:{' '}
                     {modalDownloadProgress.percent >= 0 ? `${modalDownloadProgress.percent}%` : '...'}
                   </span>
                   {modalDownloadProgress.totalBytes > 0 && (
@@ -472,11 +585,6 @@ export const App: React.FC = () => {
                     }}
                   />
                 </div>
-                {modalDownloadProgress.percent === 100 && (
-                  <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
-                    Завантаження завершено! Відкриваємо вікно встановлення Android...
-                  </p>
-                )}
               </div>
             )}
 
@@ -522,7 +630,7 @@ export const App: React.FC = () => {
         <Plus className="w-7 h-7" />
       </button>
 
-      {/* Мобільна нижня панель навігації (BOTTOM BAR — Екран № 5) */}
+      {/* Мобільна нижня панель навігації (BOTTOM BAR) */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-1.5 pt-1.5 safe-bottom grid grid-cols-5 items-center gap-1 shadow-lg transition-colors duration-200 print:hidden">
         <button
           type="button"
@@ -601,6 +709,13 @@ export const App: React.FC = () => {
         editingTransaction={editingTransaction}
         presetAttorneyTemplate={presetAttorneyTemplate}
         presetType={presetTransactionType}
+      />
+
+      {/* Модальне вікно розумного парсера банківських виписок (CSV / XLSX) */}
+      <BankStatementImportModal
+        isOpen={isBankImportModalOpen}
+        onClose={() => setIsBankImportModalOpen(false)}
+        selectedYear={selectedYear}
       />
     </div>
   );

@@ -4,7 +4,7 @@ import { saveOrShareTextFile, type SaveFileResult } from './nativePlatform';
 
 export interface TaxBookBackupPayload {
   appName: 'TaxBookDB_Minfin261';
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   exportedAt: string;
   profile: TaxProfile;
   transactions: TaxTransaction[];
@@ -22,7 +22,7 @@ export async function exportDatabaseToJson(autoShareOnNative = true): Promise<Sa
 
   const payload: TaxBookBackupPayload = {
     appName: 'TaxBookDB_Minfin261',
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: new Date().toISOString(),
     profile,
     transactions,
@@ -68,6 +68,8 @@ export async function importDatabaseFromJson(jsonText: string): Promise<{
   }
 
   const profileToSave: TaxProfile = {
+    ...DEFAULT_PROFILE,
+    ...parsed.profile,
     id: 'default',
     fullName: parsed.profile?.fullName || '',
     taxId: parsed.profile?.taxId || '',

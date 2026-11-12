@@ -16,12 +16,13 @@ const versionName = `1.0.${buildNumber}`;
 console.log(`[prepare-android] Preparing Android Release build v${versionName} (versionCode: ${buildNumber})...`);
 
 // 2. Ініціалізуємо платформу Capacitor Android, якщо папки android ще немає
+const capCliBin = path.join(rootDir, 'node_modules', '@capacitor', 'cli', 'bin', 'capacitor');
 if (!fs.existsSync(androidDir)) {
   try {
-    console.log('[prepare-android] Running npx cap add android...');
-    execSync('npx cap add android', { stdio: 'inherit', cwd: rootDir });
+    console.log('[prepare-android] Running cap add android...');
+    execSync(`"${process.execPath}" "${capCliBin}" add android`, { stdio: 'inherit', cwd: rootDir });
   } catch (err) {
-    console.warn('[prepare-android] Could not run npx cap add android:', err.message);
+    console.warn('[prepare-android] Could not run cap add android:', err.message);
   }
 }
 
@@ -176,9 +177,14 @@ tasks.whenTaskAdded { task ->
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -218,5 +224,17 @@ tasks.whenTaskAdded { task ->
 `;
     fs.writeFileSync(manifestPath, cleanManifest, 'utf8');
     console.log('[prepare-android] Wrote clean Play-Protect-safe AndroidManifest.xml');
+  }
+
+  // Забезпечуємо LF-закінчення рядків та права виконання для gradlew на Linux CI
+  const gradlewPath = path.join(androidDir, 'gradlew');
+  if (fs.existsSync(gradlewPath)) {
+    const gradlewContent = fs.readFileSync(gradlewPath, 'utf8').replace(/\r\n/g, '\n');
+    fs.writeFileSync(gradlewPath, gradlewContent, 'utf8');
+    try {
+      fs.chmodSync(gradlewPath, 0o755);
+    } catch {
+      // ignore on Windows
+    }
   }
 }

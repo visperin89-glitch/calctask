@@ -1,12 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  Bell,
+  BellRing,
+  Calculator,
   CheckCircle2,
   ChevronRight,
   Database,
   Download,
+  Fingerprint,
   Moon,
+  Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   ShieldCheck,
   Sparkles,
@@ -15,9 +21,19 @@ import {
   Upload,
   UserCheck,
 } from 'lucide-react';
-import { VAT_PAYER_REMINDER_TEXT } from '../constants/taxConstants';
+import {
+  DEFAULT_OPERATION_PRESETS,
+  EXPENSE_CATEGORIES,
+  TAX_CALENDAR_DEADLINES,
+  VAT_PAYER_REMINDER_TEXT,
+} from '../constants/taxConstants';
 import { db, DEFAULT_PROFILE } from '../db/database';
-import type { ActivityType, TaxProfile } from '../types/tax';
+import type {
+  ActivityType,
+  ExpenseCategory,
+  QuickOperationPreset,
+  TaxProfile,
+} from '../types/tax';
 import {
   type ApkDownloadProgress,
   checkForAppUpdate,
@@ -31,6 +47,14 @@ import {
   importDatabaseFromJson,
   seedDemoData,
 } from '../utils/backup';
+import {
+  cancelTaxCalendarNotifications,
+  scheduleTaxCalendarNotifications,
+  sendTestTaxNotification,
+  triggerLightHaptic,
+  triggerWarningHaptic,
+  verifyBiometricIdentity,
+} from '../utils/nativeFeatures';
 import type { AppTheme } from '../utils/theme';
 
 interface SettingsViewProps {
@@ -52,12 +76,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onChangeTheme,
   onUpdateFound,
 }) => {
-  const [isProfileSubScreenOpen, setIsProfileSubScreenOpen] = useState(false);
+  const [activeSubScreen, setActiveSubScreen] = useState<'NONE' | 'PROFILE' | 'PRESETS'>('NONE');
 
+  // Реквізити платника та податкові параметри
   const [fullName, setFullName] = useState(profile.fullName);
   const [taxId, setTaxId] = useState(profile.taxId);
   const [activityType, setActivityType] = useState<ActivityType>(profile.activityType);
   const [isVatPayer, setIsVatPayer] = useState(profile.isVatPayer);
+  const [militaryTaxRate, setMilitaryTaxRate] = useState<string>(
+    String(profile.militaryTaxRate ?? 5)
+  );
+  const [minWage, setMinWage] = useState<string>(String(profile.minWage ?? 8000));
+  const [esvMaxBaseMultiplier, setEsvMaxBaseMultiplier] = useState<string>(
+    String(profile.esvMaxBaseMultiplier ?? 15)
+  );
+  const [confirmedExpensesOnlyInReport, setConfirmedExpensesOnlyInReport] = useState<boolean>(
+    Boolean(profile.confirmedExpensesOnlyInReport)
+  );
+
+  // Шаблони повторюваних операцій (Пресети)
+  const [presets, setPresets] = useState<QuickOperationPreset[]>(
+    Array.isArray(profile.customPresets) && profile.customPresets.length > 0
+      ? profile.customPresets
+      : DEFAULT_OPERATION_PRESETS
+  );
+  const [newPresetTitle, setNewPresetTitle] = useState('');
+  const [newPresetCategory, setNewPresetCategory] = useState<ExpenseCategory>('col_9');
+  const [newPresetDocName, setNewPresetDocName] = useState('Платіжна інструкція');
+  const [newPresetNote, setNewPresetNote] = useState('');
+
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(
     null
   );
@@ -75,37 +122,173 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTaxId(profile.taxId);
     setActivityType(profile.activityType);
     setIsVatPayer(profile.isVatPayer);
+    setMilitaryTaxRate(String(profile.militaryTaxRate ?? 5));
+    setMinWage(String(profile.minWage ?? 8000));
+    setEsvMaxBaseMultiplier(String(profile.esvMaxBaseMultiplier ?? 15));
+    setConfirmedExpensesOnlyInReport(Boolean(profile.confirmedExpensesOnlyInReport));
+    setPresets(
+      Array.isArray(profile.customPresets) && profile.customPresets.length > 0
+        ? profile.customPresets
+        : DEFAULT_OPERATION_PRESETS
+    );
   }, [profile]);
 
   const showNotice = (type: 'success' | 'error', text: string) => {
     setStatusMsg({ type, text });
     setTimeout(() => {
       setStatusMsg(null);
-    }, 5000);
+    }, 5500);
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    const parsedVz = parseFloat(militaryTaxRate.replace(',', '.'));
+    const parsedMinWage = parseFloat(minWage.replace(',', '.'));
+    const parsedMultiplier = parseFloat(esvMaxBaseMultiplier.replace(',', '.'));
+
     const updated: TaxProfile = {
+      ...profile,
       id: 'default',
       fullName: fullName.trim(),
       taxId: taxId.trim(),
       activityType,
       isVatPayer,
+      militaryTaxRate: !Number.isNaN(parsedVz) && parsedVz >= 0 ? parsedVz : 5,
+      minWage: !Number.isNaN(parsedMinWage) && parsedMinWage > 0 ? parsedMinWage : 8000,
+      esvMaxBaseMultiplier:
+        !Number.isNaN(parsedMultiplier) && parsedMultiplier > 0 ? parsedMultiplier : 15,
+      confirmedExpensesOnlyInReport,
     };
     await db.profile.put(updated);
-    showNotice('success', 'Реквізити платника успішно збережено на пристрої.');
-    setIsProfileSubScreenOpen(false);
+    await triggerLightHaptic();
+    showNotice('success', 'Реквізити платника та податкові параметри успішно збережено.');
+    setActiveSubScreen('NONE');
+  };
+
+  // Блок 3.2: Біометричний захист входу
+  const handleToggleBiometric = async () => {
+    const nextState = !profile.biometricEnabled;
+    if (nextState) {
+      const verified = await verifyBiometricIdentity();
+      if (!verified) {
+        showNotice(
+          'error',
+          'Біометричну перевірку скасовано або сенсор відбитка пальця не налаштовано.'
+        );
+        return;
+      }
+    }
+    await db.profile.put({
+      ...profile,
+      biometricEnabled: nextState,
+    });
+    await triggerLightHaptic();
+    showNotice(
+      'success',
+      nextState
+        ? 'Біометричний захист входу (відбиток пальця / Face ID) увімкнено.'
+        : 'Біометричний захист входу вимкнено.'
+    );
+  };
+
+  // Блок 3.4: Локальні нагадування про податкові дедлайни
+  const handleToggleTaxReminders = async () => {
+    const nextState = !profile.taxRemindersEnabled;
+    try {
+      if (nextState) {
+        const res = await scheduleTaxCalendarNotifications(selectedYear);
+        await db.profile.put({
+          ...profile,
+          taxRemindersEnabled: true,
+        });
+        showNotice('success', res.message);
+      } else {
+        await cancelTaxCalendarNotifications();
+        await db.profile.put({
+          ...profile,
+          taxRemindersEnabled: false,
+        });
+        await triggerLightHaptic();
+        showNotice('success', 'Локальні пуш-нагадування податкового календаря вимкнено.');
+      }
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Помилка налаштування локальних сповіщень.'
+      );
+    }
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      await sendTestTaxNotification();
+      showNotice(
+        'success',
+        'Тестове сповіщення заплановано (з’явиться на екрані через 1–2 секунди).'
+      );
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Не вдалося надіслати тестове сповіщення.'
+      );
+    }
+  };
+
+  // Блок 4.1: Керування пресетами повторюваних операцій
+  const handleAddCustomPreset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPresetTitle.trim()) return;
+
+    const created: QuickOperationPreset = {
+      id: `custom_${Date.now()}`,
+      title: newPresetTitle.trim(),
+      type: 'EXPENSE',
+      category: newPresetCategory,
+      defaultDocName: newPresetDocName.trim() || 'Платіжна інструкція',
+      defaultNote: newPresetNote.trim() || newPresetTitle.trim(),
+    };
+
+    const nextPresets = [...presets, created];
+    setPresets(nextPresets);
+    await db.profile.put({
+      ...profile,
+      customPresets: nextPresets,
+    });
+    setNewPresetTitle('');
+    setNewPresetNote('');
+    await triggerLightHaptic();
+    showNotice('success', `Шаблон «${created.title}» додано до швидких пресетів.`);
+  };
+
+  const handleDeletePreset = async (presetId: string) => {
+    await triggerWarningHaptic();
+    const nextPresets = presets.filter((p) => p.id !== presetId);
+    setPresets(nextPresets);
+    await db.profile.put({
+      ...profile,
+      customPresets: nextPresets,
+    });
+  };
+
+  const handleResetDefaultPresets = async () => {
+    setPresets(DEFAULT_OPERATION_PRESETS);
+    await db.profile.put({
+      ...profile,
+      customPresets: DEFAULT_OPERATION_PRESETS,
+    });
+    await triggerLightHaptic();
+    showNotice('success', 'Стандартні шаблони операцій відновлено.');
   };
 
   const handleExportJson = async () => {
     try {
       const res = await exportDatabaseToJson(true);
+      await triggerLightHaptic();
       if (res.isNative) {
         showNotice(
           'success',
           `Резервну копію ${res.fileName} збережено у файловій системі пристрою${
-            res.shared ? ' та відкрито меню поширення.' : '.'
+            res.shared ? ' та відкрито меню поширення (Share).' : '.'
           }`
         );
       } else {
@@ -126,6 +309,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     try {
       const text = await file.text();
       const res = await importDatabaseFromJson(text);
+      await triggerLightHaptic();
       showNotice(
         'success',
         `Дані успішно відновлено! Імпортовано операцій: ${res.transactionsCount}, об’єктів ОЗ/НА: ${res.fixedAssetsCount}.`
@@ -149,6 +333,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     if (!confirmed) return;
 
     await seedDemoData(selectedYear);
+    await triggerLightHaptic();
     showNotice(
       'success',
       `Демонстраційні дані за ${selectedYear} рік успішно завантажено! Перейдіть у «Журнал» або «Звіт» для перегляду.`
@@ -156,6 +341,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleClearAll = async () => {
+    await triggerWarningHaptic();
     const confirmed = window.confirm(
       'Ви дійсно бажаєте повністю очистити всі транзакції та реєстр основних засобів? Рекомендуємо попередньо зробити експорт резервної копії (JSON).'
     );
@@ -213,13 +399,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  // Суб-екран «Реквізити платника»
-  if (isProfileSubScreenOpen) {
+  // =========================================================================
+  // СУБ-ЕКРАН 1: «Реквізити платника та податкові параметри»
+  // =========================================================================
+  if (activeSubScreen === 'PROFILE') {
     return (
       <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
         <button
           type="button"
-          onClick={() => setIsProfileSubScreenOpen(false)}
+          onClick={() => setActiveSubScreen('NONE')}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
         >
           <ArrowLeft className="w-4 h-4 text-blue-600 dark:text-sky-400" />
@@ -233,10 +421,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
-                Реквізити платника
+                Реквізити платника та податкові ставки
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Дані для шапки Типової форми № 261 та експорту звіту в Excel
+                Дані для шапки Типової форми № 261, калькулятора ПДФО/ВЗ/ЄСВ та експорту звітів
               </p>
             </div>
           </div>
@@ -309,6 +497,75 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
+            {/* Податкові параметри для калькулятора (Блок 2.1) */}
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                <Calculator className="w-4 h-4 text-blue-600 dark:text-sky-400" />
+                <span>Параметри податкового калькулятора ({selectedYear} р.)</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                    Військовий збір (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={militaryTaxRate}
+                    onChange={(e) => setMilitaryTaxRate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                    МЗП (грн на 1 січня)
+                  </label>
+                  <input
+                    type="number"
+                    step="100"
+                    min="1000"
+                    value={minWage}
+                    onChange={(e) => setMinWage(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                    Макс. база ЄСВ (МЗП)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={esvMaxBaseMultiplier}
+                    onChange={(e) => setEsvMaxBaseMultiplier(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-start gap-3 pt-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={confirmedExpensesOnlyInReport}
+                  onChange={(e) => setConfirmedExpensesOnlyInReport(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                />
+                <div className="text-xs text-slate-700 dark:text-slate-300">
+                  <strong className="text-slate-900 dark:text-white">
+                    Враховувати у витратах (Графи 6–9) лише підтверджені документами операції
+                  </strong>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Записи зі статусом «Очікується від контрагента» не включатимуться до витрат у звіті до моменту отримання первинки.
+                  </div>
+                </div>
+              </label>
+            </div>
+
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700">
               <label className="flex items-start gap-3 cursor-pointer select-none">
                 <input
@@ -331,7 +588,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="pt-2 flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => setIsProfileSubScreenOpen(false)}
+                onClick={() => setActiveSubScreen('NONE')}
                 className="flex-1 py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-700"
               >
                 Скасувати
@@ -344,6 +601,124 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <span>Зберегти профіль</span>
               </button>
             </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // СУБ-ЕКРАН 2: «Шаблони повторюваних операцій (Пресети)» (Блок 4.1)
+  // =========================================================================
+  if (activeSubScreen === 'PRESETS') {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
+        <button
+          type="button"
+          onClick={() => setActiveSubScreen('NONE')}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+        >
+          <ArrowLeft className="w-4 h-4 text-blue-600 dark:text-sky-400" />
+          <span>Назад до налаштувань</span>
+        </button>
+
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
+                Шаблони повторюваних операцій (Пресети)
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Кнопки швидкого заповнення у вікні «Швидкий запис операцій»
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleResetDefaultPresets}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Стандартні</span>
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+            {presets.map((p) => (
+              <div
+                key={p.id}
+                className="p-3 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/40"
+              >
+                <div className="min-w-0">
+                  <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                    {p.title}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    {p.defaultDocName} • {p.defaultNote}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDeletePreset(p.id)}
+                  className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 shrink-0"
+                  title="Видалити пресет"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <form
+            onSubmit={handleAddCustomPreset}
+            className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700 space-y-3"
+          >
+            <div className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Додати власний пресет витрати
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <input
+                type="text"
+                required
+                placeholder="Назва кнопки (напр. Оплата LIGA360)"
+                value={newPresetTitle}
+                onChange={(e) => setNewPresetTitle(e.target.value)}
+                className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-900 dark:text-white"
+              />
+              <select
+                value={newPresetCategory}
+                onChange={(e) => setNewPresetCategory(e.target.value as ExpenseCategory)}
+                className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-900 dark:text-white"
+              >
+                {EXPENSE_CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.shortTitle}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <input
+                type="text"
+                placeholder="Документ (напр. Акт надання послуг)"
+                value={newPresetDocName}
+                onChange={(e) => setNewPresetDocName(e.target.value)}
+                className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-900 dark:text-white"
+              />
+              <input
+                type="text"
+                placeholder="Зміст операції для Примітки"
+                value={newPresetNote}
+                onChange={(e) => setNewPresetNote(e.target.value)}
+                className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-900 dark:text-white"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Додати пресет</span>
+            </button>
           </form>
         </div>
       </div>
@@ -365,14 +740,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* 1. ВЕРХНЯ КАРТКА КОРИСТУВАЧА (Акаунт платника) */}
+      {/* 1. ВЕРХНЯ КАРТКА КОРИСТУВАЧА (Акаунт платника та податкові параметри) */}
       <div className="space-y-1.5">
         <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Акаунт платника
+          Акаунт платника та податкові параметри
         </div>
         <button
           type="button"
-          onClick={() => setIsProfileSubScreenOpen(true)}
+          onClick={() => setActiveSubScreen('PROFILE')}
           className="w-full bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-700/80 shadow-xs flex items-center justify-between gap-3 text-left hover:border-blue-500/50 transition-all duration-200 active:scale-[0.98]"
         >
           <div className="flex items-center gap-3.5 min-w-0">
@@ -388,12 +763,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   ? 'Незалежна професійна діяльність (ст. 178 ПКУ)'
                   : 'ФОП на загальній системі (ст. 177 ПКУ)'}
               </div>
-              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                 {profile.taxId && (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-[11px] font-semibold">
                     ІПН: {profile.taxId}
                   </span>
                 )}
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-sky-300 text-[11px] font-semibold">
+                  ВЗ: {profile.militaryTaxRate ?? 5}% • МЗП: {profile.minWage ?? 8000} ₴
+                </span>
                 <span
                   className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${
                     profile.isVatPayer
@@ -410,12 +788,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
       </div>
 
-      {/* 2. ГРУПА НАЛАШТУВАНЬ «Зовнішній вигляд» */}
+      {/* 2. ГРУПА «Безпека, шаблони та зовнішній вигляд» */}
       <div className="space-y-1.5">
         <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Зовнішній вигляд
+          Безпека, шаблони та зовнішній вигляд
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-hidden divide-y divide-slate-200 dark:divide-slate-700/70">
+          {/* 2.1. Тема оформлення */}
           <div className="p-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="p-2 rounded-xl bg-amber-50 dark:bg-indigo-950/70 text-amber-600 dark:text-indigo-400 shrink-0">
@@ -426,12 +805,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   Тема оформлення
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {theme === 'dark' ? 'Темна (графітово-чорна палітра)' : 'Світла (класична палітра)'}
+                  {theme === 'dark'
+                    ? 'Темна (графітово-чорна палітра)'
+                    : 'Світла (класична палітра)'}
                 </div>
               </div>
             </div>
 
-            {/* Сегмент-контрол Світла / Темна */}
             <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-900 p-1 border border-slate-200 dark:border-slate-700 shrink-0">
               <button
                 type="button"
@@ -459,10 +839,142 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
             </div>
           </div>
+
+          {/* 2.2. Вхід за відбитком пальця / Face ID (Блок 3.2) */}
+          <div className="p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
+                <Fingerprint className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-slate-900 dark:text-white">
+                  Вхід за відбитком пальця / Face ID
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  Блокування додатку при запуску та поверненні з фонового режиму
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(profile.biometricEnabled)}
+              onClick={handleToggleBiometric}
+              className={`w-12 h-7 rounded-full p-1 transition-colors shrink-0 ${
+                profile.biometricEnabled
+                  ? 'bg-emerald-600'
+                  : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <div
+                className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform ${
+                  profile.biometricEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* 2.3. Налаштування швидких пресетів операцій (Блок 4.1) */}
+          <button
+            type="button"
+            onClick={() => setActiveSubScreen('PRESETS')}
+            className="w-full p-4 flex items-center justify-between gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-sky-400 shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-slate-900 dark:text-white">
+                  Шаблони повторюваних операцій (Пресети)
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  Активних шаблонів: {presets.length} (ЄСВ, Оренда, Інтернет, РКО, Канцтовари...)
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
+          </button>
         </div>
       </div>
 
-      {/* 3. ГРУПА НАЛАШТУВАНЬ «Дані та сховище» */}
+      {/* 3. ГРУПА «Податковий календар та сповіщення» (Блок 3.4) */}
+      <div className="space-y-1.5">
+        <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Податковий календар та сповіщення
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-hidden p-4 space-y-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shrink-0">
+                {profile.taxRemindersEnabled ? (
+                  <BellRing className="w-5 h-5" />
+                ) : (
+                  <Bell className="w-5 h-5" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-slate-900 dark:text-white">
+                  Локальні нагадування про податкові дедлайни
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  Автономні пуш-повідомлення про сплату авансів ПДФО/ВЗ, ЄСВ та подання річної декларації
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(profile.taxRemindersEnabled)}
+              onClick={handleToggleTaxReminders}
+              className={`w-12 h-7 rounded-full p-1 transition-colors shrink-0 ${
+                profile.taxRemindersEnabled
+                  ? 'bg-indigo-600'
+                  : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <div
+                className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform ${
+                  profile.taxRemindersEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            {TAX_CALENDAR_DEADLINES.map((dl) => (
+              <div
+                key={dl.id}
+                className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/70 text-xs space-y-1"
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-bold text-slate-900 dark:text-white truncate">
+                    {dl.title}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold shrink-0">
+                    {dl.badge}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                  {dl.description}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleTestNotification}
+            className="w-full py-2 px-3 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-100 transition-colors"
+          >
+            🔔 Надіслати тестове нагадування зараз
+          </button>
+        </div>
+      </div>
+
+      {/* 4. ГРУПА НАЛАШТУВАНЬ «Дані та сховище» */}
       <div className="space-y-1.5">
         <div className="px-1 flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -475,7 +987,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-hidden divide-y divide-slate-200 dark:divide-slate-700/70">
-          {/* Підзаголовок автономної локальної бази Android */}
           <div className="px-4 py-3 bg-slate-50/70 dark:bg-slate-900/50 flex items-center gap-2.5">
             <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <p className="text-xs font-medium text-slate-600 dark:text-slate-300 leading-snug">
@@ -483,7 +994,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </p>
           </div>
 
-          {/* 3.1. Експорт резервної копії (JSON) */}
           <button
             type="button"
             onClick={handleExportJson}
@@ -498,14 +1008,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   Експорт резервної копії (JSON)
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                  Зберегти повну копію профілю, операцій та об’єктів ОЗ у файл
+                  Зберегти та поширити повну копію бази даних через системне меню Share
                 </div>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
           </button>
 
-          {/* 3.2. Імпорт резервної копії (JSON) */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -534,7 +1043,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             className="hidden"
           />
 
-          {/* 3.3. Заповнити демо-даними */}
           <button
             type="button"
             onClick={handleLoadDemo}
@@ -556,7 +1064,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
           </button>
 
-          {/* 3.4. Очистити базу даних (дія червоного кольору) */}
           <button
             type="button"
             onClick={handleClearAll}
@@ -580,7 +1087,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* 4. ГРУПА «Про додаток та оновлення» */}
+      {/* 5. ГРУПА «Про додаток та оновлення» */}
       <div className="space-y-1.5">
         <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Про додаток та оновлення
@@ -621,7 +1128,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="space-y-1.5 bg-emerald-800/50 p-2.5 rounded-xl border border-emerald-400/30">
                   <div className="flex items-center justify-between text-[11px] font-bold text-emerald-50">
                     <span>
-                      Завантаження: {downloadProgress.percent >= 0 ? `${downloadProgress.percent}%` : '...'}
+                      Завантаження:{' '}
+                      {downloadProgress.percent >= 0 ? `${downloadProgress.percent}%` : '...'}
                     </span>
                     {downloadProgress.totalBytes > 0 && (
                       <span>
@@ -651,7 +1159,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           >
             <RefreshCw className={`w-4 h-4 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
             <span>
-              {isCheckingUpdate ? 'Перевірка наявності оновлень...' : '🔄 Перевірити наявність оновлень'}
+              {isCheckingUpdate
+                ? 'Перевірка наявності оновлень...'
+                : '🔄 Перевірити наявність оновлень'}
             </span>
           </button>
 

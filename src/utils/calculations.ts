@@ -1,4 +1,4 @@
-import { FIXED_ASSET_GROUP_MAP } from '../constants/taxConstants';
+import { FIXED_ASSET_GROUP_MAP, UKRAINIAN_MONTHS } from '../constants/taxConstants';
 import type {
   AmortizationAppendixReport,
   AmortizationCalculationRow,
@@ -8,6 +8,7 @@ import type {
   FixedAssetGroupId,
   PeriodSummaryTotals,
   QuarterReportBlock,
+  TaxProfile,
   TaxTransaction,
 } from '../types/tax';
 
@@ -267,13 +268,20 @@ export function generateAnnualReport(
   transactions: TaxTransaction[],
   fixedAssets: FixedAsset[],
   reportYear: number,
-  includeAutoAmortizationOnDec31 = true
+  includeAutoAmortizationOnDec31 = true,
+  confirmedExpensesOnly = false
 ): {
   annualReport: AnnualReportData;
   amortizationReport: AmortizationAppendixReport;
 } {
   const yearPrefix = `${reportYear}-`;
-  const yearTransactions = transactions.filter((tx) => tx.date && tx.date.startsWith(yearPrefix));
+  const yearTransactions = transactions.filter((tx) => {
+    if (!tx.date || !tx.date.startsWith(yearPrefix)) return false;
+    if (confirmedExpensesOnly && tx.type === 'EXPENSE' && tx.docStatus === 'pending_counterparty') {
+      return false;
+    }
+    return true;
+  });
 
   // Розрахунок Додатка з амортизації за звітний рік
   const amortizationReport = calculateAmortizationAppendix(fixedAssets, reportYear);
@@ -439,7 +447,178 @@ export function generateAnnualReport(
       quarters,
       yearTotals: runningCumulative,
       includeAutoAmortizationOnDec31,
+      confirmedExpensesOnly,
     },
     amortizationReport,
+  };
+}
+
+export interface MonthlyEsvRow {
+  month: number;
+  monthName: string;
+  netProfit: number; // Чистий дохід за місяць
+  esvBase: number; // Сума доходу, на яку нараховується ЄСВ (з урахуванням мін. та макс. бази МЗП)
+  esvRate: number; // 22%
+  esvAmount: number; // Сума нарахованого ЄСВ
+}
+
+export interface QuarterlyAdvanceForecast {
+  quarter: 1 | 2 | 3 | 4;
+  label: string;
+  deadlineText: string;
+  netIncome: number; // Гр. 4
+  expenses: number; // Гр. 6-10
+  netProfit: number; // Гр. 11
+  pdfoAdvance: number; // 18%
+  militaryAdvance: number; // ВЗ %
+  esvQuarter: number; // ЄСВ за квартал
+  totalQuarterPayment: number;
+}
+
+export interface TaxCalculationSummary {
+  taxableProfit: number; // Чистий оподатковуваний дохід (Гр. 11 >= 0)
+  pdfoRate: number; // 18%
+  pdfoAmount: number;
+  militaryTaxRate: number; // напр. 5% або 1.5%
+  militaryTaxAmount: number;
+  esvRate: number; // 22%
+  minWage: number;
+  esvMaxBaseMultiplier: number;
+  minMonthlyEsv: number;
+  maxMonthlyBase: number;
+  maxMonthlyEsv: number;
+  annualMinEsv: number; // 12 * minMonthlyEsv
+  annualCalculatedEsv: number; // За фактичним розподілом по місяцях (Додаток ЄСВ 1)
+  totalTaxBurden: number; // ПДФО + ВЗ + ЄСВ
+  netDisposableIncome: number; // Чистий дохід після сплати всіх податків
+  effectiveTaxRatePercent: number;
+  quarterlyForecasts: QuarterlyAdvanceForecast[];
+  monthlyEsvRows: MonthlyEsvRow[];
+}
+
+/**
+ * Автоматичний розрахунок податкових зобов'язань у реальному часі (ПДФО 18%, Військовий збір, ЄСВ 22%),
+ * прогнозування квартальних авансових платежів та підготовка таблиць для Додатка Ф2 і Додатка ЄСВ 1.
+ */
+export function calculateTaxLiabilities(
+  annualReport: AnnualReportData,
+  profile: TaxProfile
+): TaxCalculationSummary {
+  const pdfoRate = 18;
+  const militaryTaxRate =
+    typeof profile.militaryTaxRate === 'number' && profile.militaryTaxRate >= 0
+      ? profile.militaryTaxRate
+      : 5;
+  const minWage =
+    typeof profile.minWage === 'number' && profile.minWage > 0 ? profile.minWage : 8000;
+  const esvMaxBaseMultiplier =
+    typeof profile.esvMaxBaseMultiplier === 'number' && profile.esvMaxBaseMultiplier > 0
+      ? profile.esvMaxBaseMultiplier
+      : 15;
+  const esvRate = 22;
+
+  const minMonthlyEsv = roundCurrency(minWage * (esvRate / 100));
+  const maxMonthlyBase = roundCurrency(minWage * esvMaxBaseMultiplier);
+  const maxMonthlyEsv = roundCurrency(maxMonthlyBase * (esvRate / 100));
+  const annualMinEsv = roundCurrency(minMonthlyEsv * 12);
+
+  const taxableProfit = Math.max(0, roundCurrency(annualReport.yearTotals.col11_profit));
+  const pdfoAmount = roundCurrency(taxableProfit * (pdfoRate / 100));
+  const militaryTaxAmount = roundCurrency(taxableProfit * (militaryTaxRate / 100));
+
+  // Помісячний розрахунок для Додатка ЄСВ 1
+  const monthlyProfits = new Map<number, number>();
+  for (let m = 1; m <= 12; m++) {
+    monthlyProfits.set(m, 0);
+  }
+  for (const row of annualReport.dailyRows) {
+    const prev = monthlyProfits.get(row.month) || 0;
+    monthlyProfits.set(row.month, roundCurrency(prev + row.col11_profit));
+  }
+
+  const monthlyEsvRows: MonthlyEsvRow[] = UKRAINIAN_MONTHS.map((mInfo) => {
+    const rawProfit = monthlyProfits.get(mInfo.value) || 0;
+    const netProfit = Math.max(0, rawProfit);
+    // База ЄСВ за місяць: якщо отримано прибуток або діє обов'язковий мінімальний внесок — не менше МЗП і не більше макс. бази
+    const esvBase =
+      netProfit > 0
+        ? Math.min(maxMonthlyBase, Math.max(minWage, netProfit))
+        : minWage;
+    const esvAmount = roundCurrency(esvBase * (esvRate / 100));
+
+    return {
+      month: mInfo.value,
+      monthName: mInfo.name,
+      netProfit,
+      esvBase,
+      esvRate,
+      esvAmount,
+    };
+  });
+
+  const annualCalculatedEsv = roundCurrency(
+    monthlyEsvRows.reduce((sum, r) => sum + r.esvAmount, 0)
+  );
+
+  const quarterDeadlines: Record<1 | 2 | 3 | 4, string> = {
+    1: `до 20 квітня ${annualReport.year} р.`,
+    2: `до 20 липня ${annualReport.year} р.`,
+    3: `до 20 жовтня ${annualReport.year} р.`,
+    4: `ЄСВ — до 20 січня ${annualReport.year + 1} р. | Річний розрахунок ПДФО/ВЗ — за декларацією`,
+  };
+
+  const quarterlyForecasts: QuarterlyAdvanceForecast[] = annualReport.quarters.map((qBlock) => {
+    const qExpenses = roundCurrency(
+      qBlock.quarterTotals.col6_tmc +
+        qBlock.quarterTotals.col7_salary +
+        qBlock.quarterTotals.col8_taxes +
+        qBlock.quarterTotals.col9_other +
+        qBlock.quarterTotals.col10_amortization
+    );
+    const qProfit = Math.max(0, roundCurrency(qBlock.quarterTotals.col11_profit));
+    const pdfoAdvance = roundCurrency(qProfit * (pdfoRate / 100));
+    const militaryAdvance = roundCurrency(qProfit * (militaryTaxRate / 100));
+
+    const qMonths = monthlyEsvRows.filter((m) => getQuarterFromMonth(m.month) === qBlock.quarter);
+    const esvQuarter = roundCurrency(qMonths.reduce((acc, item) => acc + item.esvAmount, 0));
+
+    return {
+      quarter: qBlock.quarter,
+      label: `${qBlock.quarter} квартал`,
+      deadlineText: quarterDeadlines[qBlock.quarter],
+      netIncome: qBlock.quarterTotals.col4_netIncome,
+      expenses: qExpenses,
+      netProfit: qBlock.quarterTotals.col11_profit,
+      pdfoAdvance,
+      militaryAdvance,
+      esvQuarter,
+      totalQuarterPayment: roundCurrency(pdfoAdvance + militaryAdvance + esvQuarter),
+    };
+  });
+
+  const totalTaxBurden = roundCurrency(pdfoAmount + militaryTaxAmount + annualCalculatedEsv);
+  const netDisposableIncome = roundCurrency(taxableProfit - totalTaxBurden);
+  const effectiveTaxRatePercent =
+    taxableProfit > 0 ? roundCurrency((totalTaxBurden / taxableProfit) * 100) : 0;
+
+  return {
+    taxableProfit,
+    pdfoRate,
+    pdfoAmount,
+    militaryTaxRate,
+    militaryTaxAmount,
+    esvRate,
+    minWage,
+    esvMaxBaseMultiplier,
+    minMonthlyEsv,
+    maxMonthlyBase,
+    maxMonthlyEsv,
+    annualMinEsv,
+    annualCalculatedEsv,
+    totalTaxBurden,
+    netDisposableIncome,
+    effectiveTaxRatePercent,
+    quarterlyForecasts,
+    monthlyEsvRows,
   };
 }

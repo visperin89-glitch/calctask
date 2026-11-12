@@ -1,4 +1,11 @@
-import type { ExpenseCategory, FixedAssetGroupConfig, FixedAssetGroupId, TransactionType } from '../types/tax';
+import type {
+  DocumentStatus,
+  ExpenseCategory,
+  FixedAssetGroupConfig,
+  FixedAssetGroupId,
+  QuickOperationPreset,
+  TransactionType,
+} from '../types/tax';
 
 export const FIXED_ASSET_GROUPS: FixedAssetGroupConfig[] = [
   {
@@ -347,3 +354,152 @@ export const UKRAINIAN_MONTHS = [
   { value: 11, name: 'Листопад' },
   { value: 12, name: 'Грудень' },
 ];
+
+export interface DocumentStatusInfo {
+  id: DocumentStatus;
+  label: string;
+  shortLabel: string;
+  isConfirmed: boolean;
+  badgeClass: string;
+}
+
+export const DOCUMENT_STATUS_OPTIONS: DocumentStatusInfo[] = [
+  {
+    id: 'original',
+    label: 'Оригінал на руках',
+    shortLabel: 'Оригінал',
+    isConfirmed: true,
+    badgeClass:
+      'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  },
+  {
+    id: 'electronic_kep',
+    label: 'Електронний документ (КЕП)',
+    shortLabel: 'Е-документ (КЕП)',
+    isConfirmed: true,
+    badgeClass:
+      'bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800',
+  },
+  {
+    id: 'pending_counterparty',
+    label: 'Очікується від контрагента',
+    shortLabel: 'Без підтвердження',
+    isConfirmed: false,
+    badgeClass:
+      'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700',
+  },
+];
+
+export const DOCUMENT_STATUS_MAP: Record<DocumentStatus, DocumentStatusInfo> =
+  DOCUMENT_STATUS_OPTIONS.reduce(
+    (acc, item) => {
+      acc[item.id] = item;
+      return acc;
+    },
+    {} as Record<DocumentStatus, DocumentStatusInfo>
+  );
+
+export const DEFAULT_OPERATION_PRESETS: QuickOperationPreset[] = [
+  {
+    id: 'preset_esv_quarter',
+    title: 'ЄСВ за квартал',
+    type: 'EXPENSE',
+    category: 'col_8',
+    defaultDocName: 'Квитанція про сплату податку/ЄСВ',
+    defaultNote:
+      'Сплата єдиного внеску на загальнообов’язкове державне соціальне страхування (ЄСВ) за квартал',
+  },
+  {
+    id: 'preset_rent_office',
+    title: 'Оренда робочого місця',
+    type: 'EXPENSE',
+    category: 'col_9',
+    defaultDocName: 'Акт надання послуг',
+    defaultNote: 'Орендна плата за користування приміщенням, яке є робочим місцем',
+  },
+  {
+    id: 'preset_telecom_internet',
+    title: "Послуги зв'язку та інтернет",
+    type: 'EXPENSE',
+    category: 'col_9',
+    defaultDocName: 'Платіжна інструкція',
+    defaultNote: 'Витрати на послуги телекомунікаційного зв’язку та користування мережею Інтернет',
+  },
+  {
+    id: 'preset_bank_rko',
+    title: 'Банківське обслуговування',
+    type: 'EXPENSE',
+    category: 'col_9',
+    defaultDocName: 'Банківська виписка (комісія РКО)',
+    defaultNote: 'Розрахунково-касове обслуговування рахунку в банку (РКО)',
+  },
+  {
+    id: 'preset_stationery_materials',
+    title: 'Канцтовари та витратні матеріали',
+    type: 'EXPENSE',
+    category: 'col_6',
+    defaultDocName: 'Фіскальний чек',
+    defaultNote: 'Придбання канцелярського приладдя, паперу, бланків та витратних матеріалів',
+  },
+];
+
+export interface TaxCalendarDeadline {
+  id: number;
+  month: number; // 1..12
+  day: number; // 1..31
+  title: string;
+  description: string;
+  badge: string;
+}
+
+export const TAX_CALENDAR_DEADLINES: TaxCalendarDeadline[] = [
+  {
+    id: 101,
+    month: 1,
+    day: 19,
+    title: 'Сплата ЄСВ за IV квартал',
+    description: 'Граничний термін сплати єдиного соціального внеску (22%) за IV квартал попереднього року (до 20 січня).',
+    badge: 'ЄСВ • IV кв.',
+  },
+  {
+    id: 102,
+    month: 4,
+    day: 19,
+    title: 'Аванс ПДФО / ВЗ та ЄСВ за І квартал',
+    description: 'Граничний термін сплати квартального авансового платежу з ПДФО, військового збору та ЄСВ за І квартал (до 20 квітня).',
+    badge: 'ПДФО / ВЗ / ЄСВ • І кв.',
+  },
+  {
+    id: 103,
+    month: 4,
+    day: 30,
+    title: 'Подання річної Податкової декларації',
+    description: 'Граничний строк подання річної Декларації про майновий стан і доходи (Додаток Ф2 та Додаток ЄСВ 1) — до 1 травня.',
+    badge: 'Декларація • Рік',
+  },
+  {
+    id: 104,
+    month: 7,
+    day: 19,
+    title: 'Аванс ПДФО / ВЗ та ЄСВ за ІІ квартал',
+    description: 'Граничний термін сплати квартального авансового платежу з ПДФО, військового збору та ЄСВ за ІІ квартал (до 20 липня).',
+    badge: 'ПДФО / ВЗ / ЄСВ • ІІ кв.',
+  },
+  {
+    id: 105,
+    month: 7,
+    day: 31,
+    title: 'Остаточна сплата ПДФО та ВЗ за річною декларацією',
+    description: 'Граничний строк сплати податкових зобов’язань, визначених у річній податковій декларації про майновий стан і доходи (до 1 серпня).',
+    badge: 'Сплата • Рік',
+  },
+  {
+    id: 106,
+    month: 10,
+    day: 19,
+    title: 'Аванс ПДФО / ВЗ та ЄСВ за ІІІ квартал',
+    description: 'Граничний термін сплати квартального авансового платежу з ПДФО, військового збору та ЄСВ за ІІІ квартал (до 20 жовтня).',
+    badge: 'ПДФО / ВЗ / ЄСВ • ІІІ кв.',
+  },
+];
+
