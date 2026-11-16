@@ -9,7 +9,12 @@ import type {
 
 export const DEFAULT_GEMINI_API_KEY =
   (import.meta.env.VITE_GEMINI_API_KEY as string | undefined)?.trim() || '';
-export const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
+export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+export const GEMINI_QUICK_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-flash-lite-latest',
+  'gemini-flash-latest',
+] as const;
 
 const GEMINI_API_KEY_STORAGE = 'taxbook_gemini_api_key';
 const GEMINI_MODEL_STORAGE = 'taxbook_gemini_model';
@@ -89,6 +94,105 @@ function buildGeminiEndpoint(model?: string): string {
   )}:generateContent`;
 }
 
+interface GeminiResponsePart {
+  text?: string;
+  thought?: boolean;
+}
+
+function extractGeminiResponseText(data: unknown): string | undefined {
+  const obj = data as {
+    candidates?: Array<{ content?: { parts?: GeminiResponsePart[] } }>;
+  } | null;
+  const parts = obj?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return undefined;
+
+  const nonThoughtTexts = parts
+    .filter((p) => !p?.thought && typeof p?.text === 'string' && p.text.trim().length > 0)
+    .map((p) => p.text as string);
+
+  if (nonThoughtTexts.length > 0) {
+    return nonThoughtTexts.join('\n').trim();
+  }
+
+  const anyText = parts.find((p) => typeof p?.text === 'string' && p.text.trim().length > 0);
+  return anyText?.text?.trim();
+}
+
+async function callGeminiWithFallback(options: {
+  apiKey: string;
+  preferredModel?: string;
+  payload: Record<string, unknown>;
+  timeoutMs?: number;
+}): Promise<{
+  ok: boolean;
+  modelUsed: string;
+  data?: Record<string, unknown>;
+  errorMessage?: string;
+}> {
+  const { apiKey, preferredModel, payload, timeoutMs = 15000 } = options;
+  const primary = (preferredModel || DEFAULT_GEMINI_MODEL).trim() || DEFAULT_GEMINI_MODEL;
+  const candidateModels = Array.from(new Set([primary, ...GEMINI_QUICK_MODELS]));
+
+  let lastError = 'Не вдалося з’єднатися з сервером Google Gemini API.';
+
+  for (let i = 0; i < candidateModels.length; i += 1) {
+    const modelName = candidateModels[i];
+    const hasNextFallback = i < candidateModels.length - 1;
+    const controller = new AbortController();
+    const timer = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(buildGeminiEndpoint(modelName), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': apiKey,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+
+      if (response.ok && data) {
+        return { ok: true, modelUsed: modelName, data };
+      }
+
+      const apiErrObj = data?.error as { message?: string } | undefined;
+      const errMsg =
+        apiErrObj?.message || `HTTP ${response.status}: ${response.statusText}`;
+      lastError = `Модель ${modelName}: ${errMsg}`;
+
+      // При 503 (High Demand), 429 (Rate Limit), 404 (Deprecated/Not Found) переходимо на резервну модель
+      const isRetryableStatus =
+        response.status === 503 || response.status === 429 || response.status === 404;
+
+      if (isRetryableStatus && hasNextFallback) {
+        continue;
+      }
+
+      return { ok: false, modelUsed: modelName, errorMessage: lastError };
+    } catch (err) {
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      lastError = isAbort
+        ? `Модель ${modelName}: перевищено час очікування відповіді (${Math.round(
+            timeoutMs / 1000
+          )} с)`
+        : err instanceof Error
+        ? `Мережева помилка (${modelName}): ${err.message}`
+        : `Мережева помилка (${modelName})`;
+
+      if (hasNextFallback) {
+        continue;
+      }
+    } finally {
+      globalThis.clearTimeout(timer);
+    }
+  }
+
+  return { ok: false, modelUsed: primary, errorMessage: lastError };
+}
+
 /**
  * Виконує тестовий POST-запит до Google Gemini API для перевірки підключення та ключа.
  */
@@ -118,57 +222,45 @@ export async function testGeminiConnection(
     };
   }
 
-  try {
-    const response = await fetch(buildGeminiEndpoint(resolvedModel), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-goog-api-key': resolvedKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: 'Відповідай одним словом: OK' }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 16,
+  const result = await callGeminiWithFallback({
+    apiKey: resolvedKey,
+    preferredModel: resolvedModel,
+    payload: {
+      contents: [
+        {
+          parts: [{ text: 'Відповідай одним словом: OK' }],
         },
-      }),
-    });
+      ],
+      generationConfig: {
+        temperature: 0,
+      },
+    },
+    timeoutMs: 15000,
+  });
 
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      const apiErrMsg =
-        data?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-      return {
-        ok: false,
-        message: `Помилка з’єднання з Gemini API: ${apiErrMsg}`,
-      };
-    }
-
-    const modelVersion: string | undefined = data?.modelVersion;
-    const textReply: string =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'OK';
-
-    return {
-      ok: true,
-      modelVersion,
-      message: `Підключення успішне! Модель «${
-        modelVersion || resolvedModel
-      }» відповіла: ${textReply}`,
-    };
-  } catch (err) {
+  if (!result.ok || !result.data) {
     return {
       ok: false,
-      message:
-        err instanceof Error
-          ? `Мережева помилка під час перевірки Gemini API: ${err.message}`
-          : 'Не вдалося з’єднатися з сервером Google Gemini API.',
+      message: `Помилка з’єднання з Gemini API: ${result.errorMessage || 'невідома помилка'}`,
     };
   }
+
+  const modelVersion =
+    typeof result.data.modelVersion === 'string'
+      ? result.data.modelVersion
+      : result.modelUsed;
+  const textReply = extractGeminiResponseText(result.data) || 'OK';
+
+  const fallbackNote =
+    result.modelUsed !== resolvedModel
+      ? ` (автоматичний резерв замість перевантаженої «${resolvedModel}»)`
+      : '';
+
+  return {
+    ok: true,
+    modelVersion,
+    message: `Підключення успішне! Модель «${modelVersion}»${fallbackNote} відповіла: ${textReply}`,
+  };
 }
 
 function normalizeIsoDate(raw?: string | null): string {
@@ -284,13 +376,10 @@ export async function recognizeDocumentWithGemini(options: {
     );
   }
 
-  const response = await fetch(buildGeminiEndpoint(resolvedModel), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-goog-api-key': resolvedKey,
-    },
-    body: JSON.stringify({
+  const result = await callGeminiWithFallback({
+    apiKey: resolvedKey,
+    preferredModel: resolvedModel,
+    payload: {
       contents: [
         {
           parts: [
@@ -308,19 +397,17 @@ export async function recognizeDocumentWithGemini(options: {
         temperature: 0.1,
         responseMimeType: 'application/json',
       },
-    }),
+    },
+    timeoutMs: 25000,
   });
 
-  const data = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    const errMsg =
-      data?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-    throw new Error(`Помилка Gemini Vision API: ${errMsg}`);
+  if (!result.ok || !result.data) {
+    throw new Error(
+      `Помилка Gemini Vision API: ${result.errorMessage || 'не вдалося отримати відповідь'}`
+    );
   }
 
-  const candidateText: string | undefined =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const candidateText = extractGeminiResponseText(result.data);
 
   if (!candidateText) {
     throw new Error('Gemini API повернув порожню відповідь без розпізнаного тексту.');

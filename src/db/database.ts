@@ -103,7 +103,7 @@ const GEMINI_KEY_STORAGE = 'taxbook_gemini_api_key';
 const GEMINI_MODEL_STORAGE = 'taxbook_gemini_model';
 const DEFAULT_GEMINI_KEY =
   (import.meta.env.VITE_GEMINI_API_KEY as string | undefined)?.trim() || '';
-const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 
 function readStoredGeminiSetting(storageKey: string, fallback: string): string {
   if (typeof window === 'undefined') return fallback;

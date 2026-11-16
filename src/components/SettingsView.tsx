@@ -6,6 +6,7 @@ import {
   Calculator,
   CheckCircle2,
   ChevronRight,
+  ClipboardPaste,
   Database,
   Download,
   Eye,
@@ -56,6 +57,7 @@ import {
 import {
   DEFAULT_GEMINI_API_KEY,
   DEFAULT_GEMINI_MODEL,
+  GEMINI_QUICK_MODELS,
   getGeminiConfig,
   saveGeminiConfig,
   testGeminiConnection,
@@ -827,18 +829,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <KeyRound className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
                   <span>API-ключ Google Gemini</span>
                 </label>
-                {(geminiApiKey || DEFAULT_GEMINI_API_KEY) && (
+                <div className="flex items-center gap-2.5">
                   <button
                     type="button"
-                    onClick={() => {
-                      setGeminiApiKey(DEFAULT_GEMINI_API_KEY);
-                      setGeminiTestResult(null);
+                    onClick={async () => {
+                      try {
+                        const clipText = await navigator.clipboard.readText();
+                        if (clipText && clipText.trim()) {
+                          setGeminiApiKey(clipText.trim());
+                          setGeminiTestResult(null);
+                          await triggerLightHaptic();
+                        }
+                      } catch {
+                        // Ігноруємо обмеження буфера обміну
+                      }
                     }}
-                    className="text-[11px] font-bold text-blue-600 dark:text-sky-400 hover:underline"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:underline"
                   >
-                    {DEFAULT_GEMINI_API_KEY ? 'Ключ за замовчуванням' : 'Очистити'}
+                    <ClipboardPaste className="w-3 h-3" />
+                    <span>Вставити з буфера</span>
                   </button>
-                )}
+                  {(geminiApiKey || DEFAULT_GEMINI_API_KEY) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGeminiApiKey(DEFAULT_GEMINI_API_KEY);
+                        setGeminiTestResult(null);
+                      }}
+                      className="text-[11px] font-bold text-blue-600 dark:text-sky-400 hover:underline"
+                    >
+                      {DEFAULT_GEMINI_API_KEY ? 'Ключ за замовчуванням' : 'Очистити'}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="relative flex items-center">
                 <input
@@ -892,6 +915,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 }}
                 className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-mono font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-600"
               />
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {GEMINI_QUICK_MODELS.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setGeminiModel(m);
+                      setGeminiTestResult(null);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] font-mono font-bold transition-colors ${
+                      geminiModel === m
+                        ? 'bg-violet-600 text-white border-violet-600'
+                        : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Перевірка підключення */}
