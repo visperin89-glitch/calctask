@@ -99,6 +99,22 @@ export class TaxBookDatabase extends Dexie {
 
 export const db = new TaxBookDatabase();
 
+const GEMINI_KEY_STORAGE = 'taxbook_gemini_api_key';
+const GEMINI_MODEL_STORAGE = 'taxbook_gemini_model';
+const DEFAULT_GEMINI_KEY =
+  (import.meta.env.VITE_GEMINI_API_KEY as string | undefined)?.trim() || '';
+const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
+
+function readStoredGeminiSetting(storageKey: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const val = window.localStorage.getItem(storageKey)?.trim();
+    return val || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export const DEFAULT_PROFILE: TaxProfile = {
   id: 'default',
   fullName: '',
@@ -112,9 +128,14 @@ export const DEFAULT_PROFILE: TaxProfile = {
   biometricEnabled: false,
   taxRemindersEnabled: false,
   customPresets: DEFAULT_OPERATION_PRESETS,
+  geminiApiKey: DEFAULT_GEMINI_KEY,
+  geminiModel: DEFAULT_GEMINI_MODEL,
 };
 
 export async function ensureDefaultProfile(): Promise<TaxProfile> {
+  const storedKey = readStoredGeminiSetting(GEMINI_KEY_STORAGE, DEFAULT_GEMINI_KEY);
+  const storedModel = readStoredGeminiSetting(GEMINI_MODEL_STORAGE, DEFAULT_GEMINI_MODEL);
+
   const existing = await db.profile.get('default');
   if (existing) {
     const patched: TaxProfile = {
@@ -124,9 +145,16 @@ export async function ensureDefaultProfile(): Promise<TaxProfile> {
         Array.isArray(existing.customPresets) && existing.customPresets.length > 0
           ? existing.customPresets
           : DEFAULT_OPERATION_PRESETS,
+      geminiApiKey: existing.geminiApiKey?.trim() || storedKey,
+      geminiModel: existing.geminiModel?.trim() || storedModel,
     };
     return patched;
   }
-  await db.profile.put(DEFAULT_PROFILE);
-  return DEFAULT_PROFILE;
+  const initialProfile: TaxProfile = {
+    ...DEFAULT_PROFILE,
+    geminiApiKey: storedKey,
+    geminiModel: storedModel,
+  };
+  await db.profile.put(initialProfile);
+  return initialProfile;
 }

@@ -203,39 +203,39 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
       </div>
 
       {/* 3-Й БЛОК: Чотири віджети сум за графами (Гр. 7, Гр. 10, Гр. 11, Гр. 12) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-        <div className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
-          <div className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="min-w-0 p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
+          <div className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 truncate">
             Первісна вартість (Гр. 7)
           </div>
-          <div className="text-sm sm:text-xl font-extrabold text-slate-900 dark:text-white mt-1 truncate">
+          <div className="text-base xs:text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-1 truncate">
             {formatCurrency(amortizationReport.totalInitialCost)} ₴
           </div>
         </div>
 
-        <div className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
-          <div className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400">
+        <div className="min-w-0 p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
+          <div className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 truncate">
             На поч. року (Гр. 10)
           </div>
-          <div className="text-sm sm:text-xl font-extrabold text-slate-900 dark:text-white mt-1 truncate">
+          <div className="text-base xs:text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-1 truncate">
             {formatCurrency(amortizationReport.totalStartPeriodValue)} ₴
           </div>
         </div>
 
-        <div className="p-3 sm:p-4 rounded-2xl bg-blue-50/90 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
-          <div className="text-[11px] sm:text-xs font-bold text-blue-800 dark:text-sky-300">
+        <div className="min-w-0 p-3 sm:p-4 rounded-2xl bg-blue-50/90 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
+          <div className="text-[11px] sm:text-xs font-bold text-blue-800 dark:text-sky-300 truncate">
             Аморт. за рік (Гр. 11)
           </div>
-          <div className="text-sm sm:text-xl font-extrabold text-blue-900 dark:text-sky-400 mt-1 truncate">
+          <div className="text-base xs:text-lg sm:text-xl font-bold text-blue-900 dark:text-sky-400 mt-1 truncate">
             {formatCurrency(amortizationReport.totalYearAmortization)} ₴
           </div>
         </div>
 
-        <div className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
-          <div className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400">
+        <div className="min-w-0 p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
+          <div className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 truncate">
             На кін. року (Гр. 12)
           </div>
-          <div className="text-sm sm:text-xl font-extrabold text-slate-900 dark:text-white mt-1 truncate">
+          <div className="text-base xs:text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-1 truncate">
             {formatCurrency(amortizationReport.totalEndPeriodValue)} ₴
           </div>
         </div>
@@ -267,26 +267,26 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
               return (
                 <div
                   key={asset.id}
-                  className={`bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-5 border transition-all duration-200 flex flex-col justify-between ${
+                  className={`min-w-0 bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-5 border transition-all duration-200 flex flex-col justify-between ${
                     asset.isActive
                       ? 'border-slate-200 dark:border-slate-700/80 shadow-xs'
                       : 'border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 opacity-75'
                   }`}
                 >
-                  <div className="space-y-3">
+                  <div className="space-y-3 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-sky-300 border border-blue-200 dark:border-blue-800">
+                      <div className="min-w-0 flex-1">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-sky-300 border border-blue-200 dark:border-blue-800 break-words">
                           {grp ? grp.shortName : asset.group} (мін. {grp?.minYears || 2} р.)
                         </span>
-                        <h3 className="mt-1.5 text-base font-bold text-slate-900 dark:text-white">
+                        <h3 className="mt-1.5 text-base font-bold text-slate-900 dark:text-white break-words">
                           {asset.name}
                         </h3>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleToggleActive(asset)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                        className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
                           asset.isActive
                             ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
                             : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
@@ -297,34 +297,34 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
                     </div>
 
                     {restricted && (
-                      <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 text-amber-900 dark:text-amber-200 text-xs font-medium">
+                      <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 text-amber-900 dark:text-amber-200 text-xs font-medium break-words">
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <span>{RESTRICTED_ASSET_WARNING_TEXT}</span>
                       </div>
                     )}
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/70 border border-slate-100 dark:border-slate-700/60 text-xs">
-                      <div>
-                        <div className="text-slate-500 dark:text-slate-400">Первісна вартість (Гр. 7)</div>
-                        <div className="font-extrabold text-slate-900 dark:text-white text-sm mt-0.5">
+                      <div className="min-w-0">
+                        <div className="text-slate-500 dark:text-slate-400 truncate">Первісна вартість (Гр. 7)</div>
+                        <div className="font-extrabold text-slate-900 dark:text-white text-sm mt-0.5 truncate">
                           {formatCurrency(asset.initialCost)} грн
                         </div>
                       </div>
-                      <div>
-                        <div className="text-slate-500 dark:text-slate-400">Річна норма (Гр. 8)</div>
-                        <div className="font-bold text-slate-800 dark:text-slate-200 text-sm mt-0.5">
+                      <div className="min-w-0">
+                        <div className="text-slate-500 dark:text-slate-400 truncate">Річна норма (Гр. 8)</div>
+                        <div className="font-bold text-slate-800 dark:text-slate-200 text-sm mt-0.5 truncate">
                           {formatCurrency(annualNorm)} грн
                         </div>
                       </div>
-                      <div>
-                        <div className="text-slate-500 dark:text-slate-400">Місячна норма (Гр. 9)</div>
-                        <div className="font-bold text-blue-700 dark:text-sky-400 text-sm mt-0.5">
+                      <div className="min-w-0 col-span-2 sm:col-span-1">
+                        <div className="text-slate-500 dark:text-slate-400 truncate">Місячна норма (Гр. 9)</div>
+                        <div className="font-bold text-blue-700 dark:text-sky-400 text-sm mt-0.5 truncate">
                           {formatCurrency(monthlyNorm)} грн/міс
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                    <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1 break-words">
                       <div>
                         <span className="font-semibold text-slate-700 dark:text-slate-200">
                           Введено в експлуатацію:
@@ -346,7 +346,7 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/70 flex items-center justify-between gap-2">
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/70 flex flex-wrap items-center justify-between gap-2">
                     <div className="text-xs">
                       {calcRow ? (
                         <span className="text-slate-700 dark:text-slate-300">
@@ -450,7 +450,7 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
       {/* Модальне вікно створення / редагування об'єкта ОЗ/НА */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 overflow-y-auto animate-fade-in">
-          <div className="w-full max-w-xl bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[94vh] flex flex-col animate-slide-up sm:animate-scale-in">
+          <div className="w-full max-w-xl bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85dvh] flex flex-col animate-slide-up sm:animate-scale-in">
             <div className="flex items-center justify-between px-4 py-3.5 bg-slate-900 dark:bg-slate-950 text-white">
               <div className="flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-sky-400" />

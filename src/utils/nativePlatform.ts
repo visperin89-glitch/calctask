@@ -3,6 +3,7 @@ import { App as CapApp } from '@capacitor/app';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { SplashScreen } from '@capacitor/splash-screen';
+import { StatusBar, Style } from '@capacitor/status-bar';
 
 export interface SaveFileResult {
   isNative: boolean;
@@ -216,6 +217,30 @@ export async function hideNativeSplashScreen(): Promise<void> {
     await SplashScreen.hide();
   } catch (err) {
     console.warn('SplashScreen hide warning:', err);
+  }
+}
+
+/**
+ * Налаштовує системний статус-бар (@capacitor/status-bar) відповідно до активної теми
+ * так, щоб статус-бар не накладався на шапку та мав коректний контраст іконок.
+ */
+export async function configureNativeStatusBar(theme: 'light' | 'dark'): Promise<void> {
+  const statusBarBgColor = theme === 'dark' ? '#020617' : '#0f172a';
+
+  if (typeof document !== 'undefined') {
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) {
+      themeMeta.setAttribute('content', statusBarBgColor);
+    }
+  }
+
+  if (!isNativeApp()) return;
+  try {
+    await StatusBar.setOverlaysWebView({ overlay: false });
+    await StatusBar.setBackgroundColor({ color: statusBarBgColor });
+    await StatusBar.setStyle({ style: Style.Dark });
+  } catch (err) {
+    console.warn('StatusBar configuration warning:', err);
   }
 }
 

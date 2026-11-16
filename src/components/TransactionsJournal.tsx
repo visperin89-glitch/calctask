@@ -252,16 +252,16 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
   return (
     <div className="space-y-3.5 sm:space-y-5 w-full animate-fade-in">
       {/* Зведені картки аналітики (4 картки: ДОХІД, ВИТРАТИ, ЧИСТИЙ ДОХІД, ПОВЕРНЕННЯ) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {/* 1. ДОХІД (ГР. 4) */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98] min-w-0">
+        <div className="min-w-0 bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
           <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             <span className="truncate">ДОХІД (ГР. 4)</span>
             <span className="p-1 sm:p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
               <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </span>
           </div>
-          <div className="mt-1.5 sm:mt-2 text-sm sm:text-2xl font-extrabold text-slate-900 dark:text-white truncate">
+          <div className="mt-1.5 sm:mt-2 text-base xs:text-lg sm:text-xl font-bold text-slate-900 dark:text-white truncate">
             {formatCurrency(summary.netIncome)}{' '}
             <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">₴</span>
           </div>
@@ -271,14 +271,14 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
         </div>
 
         {/* 2. ВИТРАТИ (ГР. 6–9) */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98] min-w-0">
+        <div className="min-w-0 bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
           <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             <span className="truncate">ВИТРАТИ (ГР. 6–9)</span>
             <span className="p-1 sm:p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 shrink-0">
               <ArrowDownRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </span>
           </div>
-          <div className="mt-1.5 sm:mt-2 text-sm sm:text-2xl font-extrabold text-rose-700 dark:text-rose-400 truncate">
+          <div className="mt-1.5 sm:mt-2 text-base xs:text-lg sm:text-xl font-bold text-rose-700 dark:text-rose-400 truncate">
             {formatCurrency(summary.expenses)}{' '}
             <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">₴</span>
           </div>
@@ -288,7 +288,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
         </div>
 
         {/* 3. ЧИСТИЙ ДОХІД */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98] min-w-0">
+        <div className="min-w-0 bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
           <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             <span className="truncate">ЧИСТИЙ ДОХІД</span>
             <span className="p-1 sm:p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 shrink-0">
@@ -296,7 +296,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
             </span>
           </div>
           <div
-            className={`mt-1.5 sm:mt-2 text-sm sm:text-2xl font-extrabold truncate ${
+            className={`mt-1.5 sm:mt-2 text-base xs:text-lg sm:text-xl font-bold truncate ${
               summary.netProfit >= 0
                 ? 'text-blue-700 dark:text-sky-400'
                 : 'text-rose-700 dark:text-rose-400'
@@ -320,7 +320,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
               setSelectedType((prev) => (prev === 'RETURN' ? 'ALL' : 'RETURN'));
             }
           }}
-          className="text-left bg-white dark:bg-slate-800 hover:border-amber-400 dark:hover:border-amber-500/60 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98] min-w-0"
+          className="min-w-0 text-left bg-white dark:bg-slate-800 hover:border-amber-400 dark:hover:border-amber-500/60 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]"
         >
           <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             <span className="truncate">ПОВЕРНЕННЯ</span>
@@ -328,7 +328,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
               <Undo2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </span>
           </div>
-          <div className="mt-1.5 sm:mt-2 text-sm sm:text-2xl font-extrabold text-amber-700 dark:text-amber-400 truncate">
+          <div className="mt-1.5 sm:mt-2 text-base xs:text-lg sm:text-xl font-bold text-amber-700 dark:text-amber-400 truncate">
             {formatCurrency(summary.returns)}{' '}
             <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">₴</span>
           </div>
@@ -540,7 +540,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
                       {/* Оверлей свайп-дій (Свайп вліво -> Видалення, Свайп вправо -> Дублювання / Редагування) */}
                       {(isSwipedLeft || isSwipedRight) && (
                         <div
-                          className={`mb-2.5 p-2 rounded-xl flex items-center justify-between gap-2 animate-fade-in ${
+                          className={`mb-2.5 p-2 rounded-xl flex flex-wrap items-center justify-between gap-2 animate-fade-in ${
                             isSwipedLeft
                               ? 'bg-rose-600 text-white'
                               : 'bg-blue-600 text-white'
@@ -551,7 +551,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
                               ? 'Підтвердити видалення запису?'
                               : 'Швидка дія з операцією:'}
                           </span>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             {isSwipedRight && (
                               <>
                                 <button
@@ -609,7 +609,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
                           </span>
                           {catInfo && (
                             <span
-                              className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${catInfo.badgeColor}`}
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-medium border break-words max-w-full ${catInfo.badgeColor}`}
                             >
                               {catInfo.shortTitle}
                             </span>
@@ -650,9 +650,9 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
                       <div className="mt-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="space-y-1 min-w-0 flex-1">
                           {docFormatted ? (
-                            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                              <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              <span className="truncate">{docFormatted}</span>
+                            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-start gap-1.5 min-w-0">
+                              <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                              <span className="break-words min-w-0">{docFormatted}</span>
                             </div>
                           ) : (
                             <div className="text-xs italic text-amber-600 dark:text-amber-400">
@@ -661,13 +661,13 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
                           )}
 
                           {tx.note && (
-                            <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                            <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 break-words">
                               {tx.note}
                             </div>
                           )}
 
                           {restrictedWarn && (
-                            <div className="inline-flex items-center gap-1.5 text-[11px] text-amber-900 bg-amber-100 px-2.5 py-1 rounded-lg font-medium">
+                            <div className="inline-flex items-center gap-1.5 text-[11px] text-amber-900 bg-amber-100 px-2.5 py-1 rounded-lg font-medium break-words max-w-full">
                               <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                               <span>Увага: обмеження пп. 177.4.6 ПКУ!</span>
                             </div>

@@ -410,27 +410,27 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
 
       {/* Компактне річне зведення */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3 print:hidden">
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-2.5 sm:p-3.5 border border-slate-200 dark:border-slate-700/80">
+        <div className="min-w-0 bg-white dark:bg-slate-800 rounded-xl p-2.5 sm:p-3.5 border border-slate-200 dark:border-slate-700/80">
           <div className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 truncate">
             Дохід за рік (Гр. 4)
           </div>
-          <div className="text-xs sm:text-lg font-extrabold text-emerald-700 dark:text-emerald-400 mt-0.5 truncate">
+          <div className="text-xs xs:text-sm sm:text-lg font-bold text-emerald-700 dark:text-emerald-400 mt-0.5 truncate">
             {formatCurrency(annualReport.yearTotals.col4_netIncome)} ₴
           </div>
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-2.5 sm:p-3.5 border border-slate-200 dark:border-slate-700/80">
+        <div className="min-w-0 bg-white dark:bg-slate-800 rounded-xl p-2.5 sm:p-3.5 border border-slate-200 dark:border-slate-700/80">
           <div className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 truncate">
             Витрати (Гр. 6–10)
           </div>
-          <div className="text-xs sm:text-lg font-extrabold text-rose-700 dark:text-rose-400 mt-0.5 truncate">
+          <div className="text-xs xs:text-sm sm:text-lg font-bold text-rose-700 dark:text-rose-400 mt-0.5 truncate">
             {formatCurrency(totalExpensesYear)} ₴
           </div>
         </div>
-        <div className="bg-blue-50/90 dark:bg-blue-950/50 rounded-xl p-2.5 sm:p-3.5 border border-blue-200 dark:border-blue-800">
+        <div className="min-w-0 bg-blue-50/90 dark:bg-blue-950/50 rounded-xl p-2.5 sm:p-3.5 border border-blue-200 dark:border-blue-800">
           <div className="text-[10px] sm:text-xs font-bold text-blue-800 dark:text-sky-300 truncate">
             Чистий дохід (Гр. 11)
           </div>
-          <div className="text-xs sm:text-lg font-extrabold text-blue-900 dark:text-white mt-0.5 truncate">
+          <div className="text-xs xs:text-sm sm:text-lg font-bold text-blue-900 dark:text-white mt-0.5 truncate">
             {formatCurrency(annualReport.yearTotals.col11_profit)} ₴
           </div>
         </div>
@@ -460,39 +460,39 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
         </div>
 
         {/* 4 картки податків */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           {/* ПДФО (18%) */}
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700">
-            <div className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400">
+          <div className="min-w-0 p-3 sm:p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700">
+            <div className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 truncate">
               ПДФО ({taxSummary.pdfoRate}%)
             </div>
-            <div className="text-base sm:text-xl font-extrabold text-slate-900 dark:text-white mt-1 truncate">
+            <div className="text-base xs:text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-1 truncate">
               {formatCurrency(taxSummary.pdfoAmount)} ₴
             </div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
               п. 167.1, ст. 177 / 178 ПКУ
             </div>
           </div>
 
           {/* Військовий збір */}
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700">
-            <div className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400">
+          <div className="min-w-0 p-3 sm:p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700">
+            <div className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 truncate">
               Військовий збір ({taxSummary.militaryTaxRate}%)
             </div>
-            <div className="text-base sm:text-xl font-extrabold text-amber-700 dark:text-amber-400 mt-1 truncate">
+            <div className="text-base xs:text-lg sm:text-xl font-bold text-amber-700 dark:text-amber-400 mt-1 truncate">
               {formatCurrency(taxSummary.militaryTaxAmount)} ₴
             </div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
               Ставка з налаштувань профілю
             </div>
           </div>
 
           {/* ЄСВ (22%) */}
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700">
-            <div className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400">
+          <div className="min-w-0 p-3 sm:p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700">
+            <div className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 truncate">
               ЄСВ ({taxSummary.esvRate}%) за рік
             </div>
-            <div className="text-base sm:text-xl font-extrabold text-indigo-700 dark:text-indigo-400 mt-1 truncate">
+            <div className="text-base xs:text-lg sm:text-xl font-bold text-indigo-700 dark:text-indigo-400 mt-1 truncate">
               {formatCurrency(taxSummary.annualCalculatedEsv)} ₴
             </div>
             <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
@@ -501,11 +501,11 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
           </div>
 
           {/* Усього податків + Залишок */}
-          <div className="p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-            <div className="text-[11px] font-bold uppercase text-emerald-800 dark:text-emerald-300">
+          <div className="min-w-0 p-3 sm:p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+            <div className="text-[11px] font-bold uppercase text-emerald-800 dark:text-emerald-300 truncate">
               Залишок після податків
             </div>
-            <div className="text-base sm:text-xl font-extrabold text-emerald-700 dark:text-emerald-300 mt-1 truncate">
+            <div className="text-base xs:text-lg sm:text-xl font-bold text-emerald-700 dark:text-emerald-300 mt-1 truncate">
               {formatCurrency(taxSummary.netDisposableIncome)} ₴
             </div>
             <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5 truncate">
@@ -517,7 +517,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
         {/* Блок прогнозування авансових платежів за кварталами */}
         <div className="pt-2 border-t border-slate-100 dark:border-slate-700/70 space-y-2.5">
           <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-            <CalendarClock className="w-4 h-4 text-blue-600 dark:text-sky-400" />
+            <CalendarClock className="w-4 h-4 text-blue-600 dark:text-sky-400 shrink-0" />
             <span>Прогнозування авансових платежів за кварталами ({selectedYear} р.)</span>
           </div>
 
@@ -525,9 +525,9 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
             {taxSummary.quarterlyForecasts.map((q) => (
               <div
                 key={q.quarter}
-                className="p-3 rounded-xl bg-slate-50/90 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 space-y-1.5 text-xs"
+                className="min-w-0 p-3 rounded-xl bg-slate-50/90 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 space-y-1.5 text-xs"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <span className="font-extrabold text-slate-900 dark:text-white">
                     {q.label}
                   </span>
@@ -630,7 +630,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
             </div>
 
             {activeDeclarationTab === 'F2' ? (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-x-auto">
                 <table className="w-full text-xs text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-bold">
@@ -922,7 +922,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
 
                             <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-50 p-2 rounded-lg border border-slate-100">
                               {dRow.col2_income > 0 && (
-                                <div>
+                                <div className="min-w-0 break-words">
                                   <span className="text-slate-500">Гр. 2 (Дохід):</span>{' '}
                                   <strong className="text-emerald-700">
                                     {formatCurrency(dRow.col2_income)}
@@ -930,7 +930,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                                 </div>
                               )}
                               {dRow.col3_return > 0 && (
-                                <div>
+                                <div className="min-w-0 break-words">
                                   <span className="text-slate-500">Гр. 3 (Поверн.):</span>{' '}
                                   <strong className="text-amber-700">
                                     {formatCurrency(dRow.col3_return)}
@@ -938,7 +938,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                                 </div>
                               )}
                               {dRow.col4_netIncome > 0 && (
-                                <div>
+                                <div className="min-w-0 break-words">
                                   <span className="text-slate-500">Гр. 4 (Деклар.):</span>{' '}
                                   <strong className="text-slate-900">
                                     {formatCurrency(dRow.col4_netIncome)}
@@ -946,7 +946,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                                 </div>
                               )}
                               {dRow.col6_tmc > 0 && (
-                                <div>
+                                <div className="min-w-0 break-words">
                                   <span className="text-slate-500">Гр. 6 (ТМЦ):</span>{' '}
                                   <strong className="text-rose-700">
                                     {formatCurrency(dRow.col6_tmc)}
@@ -954,7 +954,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                                 </div>
                               )}
                               {dRow.col7_salary > 0 && (
-                                <div>
+                                <div className="min-w-0 break-words">
                                   <span className="text-slate-500">Гр. 7 (ЗП):</span>{' '}
                                   <strong className="text-rose-700">
                                     {formatCurrency(dRow.col7_salary)}
@@ -962,7 +962,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                                 </div>
                               )}
                               {dRow.col8_taxes > 0 && (
-                                <div>
+                                <div className="min-w-0 break-words">
                                   <span className="text-slate-500">Гр. 8 (ЄСВ/Под.):</span>{' '}
                                   <strong className="text-rose-700">
                                     {formatCurrency(dRow.col8_taxes)}
@@ -970,7 +970,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                                 </div>
                               )}
                               {dRow.col9_other > 0 && (
-                                <div>
+                                <div className="min-w-0 break-words">
                                   <span className="text-slate-500">Гр. 9 (Інші):</span>{' '}
                                   <strong className="text-rose-700">
                                     {formatCurrency(dRow.col9_other)}
@@ -978,7 +978,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                                 </div>
                               )}
                               {dRow.col10_amortization > 0 && (
-                                <div className="col-span-2">
+                                <div className="col-span-2 min-w-0 break-words">
                                   <span className="text-slate-500">Гр. 10 (Амортизація):</span>{' '}
                                   <strong className="text-blue-700">
                                     {formatCurrency(dRow.col10_amortization)}
@@ -1001,14 +1001,14 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                     )}
 
                     <div className="bg-slate-100 p-2.5 border-t border-slate-300 text-[11px] space-y-1">
-                      <div className="font-bold text-slate-900 flex justify-between">
+                      <div className="font-bold text-slate-900 flex flex-wrap justify-between gap-1">
                         <span>{qBlock.quarterLabel}:</span>
-                        <span>
+                        <span className="break-words">
                           Дохід: {formatCurrency(qBlock.quarterTotals.col4_netIncome)} | Витрати:{' '}
                           {formatCurrency(qTotalExp)}
                         </span>
                       </div>
-                      <div className="font-extrabold text-blue-900 flex justify-between pt-1 border-t border-slate-200">
+                      <div className="font-extrabold text-blue-900 flex flex-wrap justify-between gap-1 pt-1 border-t border-slate-200">
                         <span>{qBlock.cumulativeLabel}:</span>
                         <span>{formatCurrency(qBlock.cumulativeTotals.col11_profit)} ₴</span>
                       </div>
@@ -1023,7 +1023,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
           <div
             className={`${
               mobileViewMode === 'FIT' ? 'hidden md:block print:block' : 'block'
-            } overflow-x-auto -mx-1 px-1`}
+            } overflow-x-auto w-full`}
           >
             <table className="w-full text-[11px] border-collapse border border-slate-400 min-w-[980px]">
               <thead>
@@ -1218,36 +1218,36 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                     className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-bold text-slate-900">
+                      <span className="font-bold text-slate-900 break-words min-w-0">
                         #{row.index}. {row.col3_assetName}
                       </span>
                       <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-bold text-[11px] shrink-0">
                         Гр. 11: {formatCurrency(row.col11_yearAmortization)} ₴
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-600">{row.col2_groupName}</div>
+                    <div className="text-[11px] text-slate-600 break-words">{row.col2_groupName}</div>
                     <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-white p-2 rounded-lg border border-slate-200">
-                      <div>
+                      <div className="min-w-0 truncate">
                         <span className="text-slate-500">Гр. 7 (Первісна):</span>{' '}
                         <strong>{formatCurrency(row.col7_initialCost)}</strong>
                       </div>
-                      <div>
+                      <div className="min-w-0 truncate">
                         <span className="text-slate-500">Гр. 6 (Строк):</span>{' '}
                         <strong>{row.col6_usefulLifeYears} р.</strong>
                       </div>
-                      <div>
+                      <div className="min-w-0 truncate">
                         <span className="text-slate-500">Гр. 8 (Річна):</span>{' '}
                         <strong>{formatCurrency(row.col8_annualAmount)}</strong>
                       </div>
-                      <div>
+                      <div className="min-w-0 truncate">
                         <span className="text-slate-500">Гр. 9 (Місячна):</span>{' '}
                         <strong>{formatCurrency(row.col9_monthlyAmount)}</strong>
                       </div>
-                      <div>
+                      <div className="min-w-0 truncate">
                         <span className="text-slate-500">Гр. 10 (На поч.):</span>{' '}
                         <strong>{formatCurrency(row.col10_startPeriodValue)}</strong>
                       </div>
-                      <div>
+                      <div className="min-w-0 truncate">
                         <span className="text-slate-500">Гр. 12 (На кін.):</span>{' '}
                         <strong>{formatCurrency(row.col12_endPeriodValue)}</strong>
                       </div>
@@ -1256,7 +1256,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
                 ))
               )}
 
-              <div className="p-3 rounded-xl bg-blue-100/80 border border-blue-300 text-xs font-extrabold text-blue-950 flex justify-between">
+              <div className="p-3 rounded-xl bg-blue-100/80 border border-blue-300 text-xs font-extrabold text-blue-950 flex flex-wrap justify-between gap-1">
                 <span>УСЬОГО амортизація за {selectedYear} рік (Гр. 11):</span>
                 <span>{formatCurrency(amortizationReport.totalYearAmortization)} ₴</span>
               </div>
@@ -1267,7 +1267,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
           <div
             className={`${
               mobileViewMode === 'FIT' ? 'hidden md:block print:block' : 'block'
-            } overflow-x-auto -mx-1 px-1`}
+            } overflow-x-auto w-full`}
           >
             <table className="w-full text-[11px] border-collapse border border-slate-400 min-w-[980px]">
               <thead>

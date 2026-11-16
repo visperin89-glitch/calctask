@@ -14,7 +14,9 @@ import {
   Info,
   Plus,
   PlusCircle,
+  RefreshCw,
   Save,
+  ScanLine,
   Sparkles,
   Trash2,
   X,
@@ -36,10 +38,12 @@ import type {
   DocumentStatus,
   ExpenseCategory,
   QuickOperationPreset,
+  ScannedDocumentResult,
   TaxProfile,
   TaxTransaction,
   TransactionType,
 } from '../types/tax';
+import { getGeminiConfig, recognizeDocumentWithGemini } from '../utils/geminiScanner';
 import {
   captureOrPickReceiptPhoto,
   loadReceiptImageDataUrl,
@@ -56,6 +60,7 @@ interface QuickInputModalProps {
   editingTransaction?: TaxTransaction | null;
   presetAttorneyTemplate?: AttorneyExpenseTemplate | null;
   presetType?: TransactionType | null;
+  scannedDocument?: ScannedDocumentResult | null;
   defaultDate?: string;
   onSaved?: () => void;
 }
@@ -67,6 +72,7 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
   editingTransaction,
   presetAttorneyTemplate,
   presetType,
+  scannedDocument,
   defaultDate,
   onSaved,
 }) => {
@@ -90,6 +96,11 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
   const [note, setNote] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isAiScanning, setIsAiScanning] = useState(false);
+  const [aiScanNotice, setAiScanNotice] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   const filePhotoInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -99,66 +110,107 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
       : DEFAULT_OPERATION_PRESETS;
 
   useEffect(() => {
-    if (editingTransaction) {
-      setType(editingTransaction.type);
-      setDate(editingTransaction.date);
-      setAmountStr(String(editingTransaction.amount));
-      setDocName(editingTransaction.docName || '');
-      setDocNumber(editingTransaction.docNumber || '');
-      setDocDate(editingTransaction.docDate || editingTransaction.date);
-      setDocStatus(editingTransaction.docStatus || 'original');
-      setAttachmentPath(editingTransaction.attachmentPath);
-      setExpenseCategory(editingTransaction.expenseCategory || 'col_9');
-      setSelectedAttorneyTemplateId('');
-      setActivePresetId('');
-      setIsAttorneyDirectoryOpen(false);
-      setNote(editingTransaction.note || '');
-      setErrors({});
-
-      if (editingTransaction.attachmentPath) {
-        loadReceiptImageDataUrl(editingTransaction.attachmentPath)
-          .then((url) => setAttachmentPreviewUrl(url))
-          .catch(() => setAttachmentPreviewUrl(null));
-      } else {
-        setAttachmentPreviewUrl(null);
-      }
-    } else if (presetAttorneyTemplate) {
-      const initDate = defaultDate || new Date().toISOString().slice(0, 10);
-      setType('EXPENSE');
-      setDate(initDate);
-      setAmountStr('');
-      setDocName(presetAttorneyTemplate.defaultDocName);
-      setDocNumber('');
-      setDocDate(initDate);
-      setDocStatus('original');
-      setAttachmentPath(undefined);
-      setAttachmentPreviewUrl(null);
-      setExpenseCategory(presetAttorneyTemplate.category);
-      setSelectedAttorneyTemplateId(presetAttorneyTemplate.id);
-      setActivePresetId('');
-      setIsAttorneyDirectoryOpen(false);
-      setNote(presetAttorneyTemplate.fullText);
-      setErrors({});
-    } else {
-      const initDate = defaultDate || new Date().toISOString().slice(0, 10);
-      const initType: TransactionType = presetType || 'INCOME';
-      setType(initType);
-      setDate(initDate);
-      setAmountStr('');
-      setDocName(QUICK_DOC_NAMES[initType][0]);
-      setDocNumber('');
-      setDocDate(initDate);
-      setDocStatus('original');
-      setAttachmentPath(undefined);
-      setAttachmentPreviewUrl(null);
-      setExpenseCategory('col_9');
-      setSelectedAttorneyTemplateId('');
-      setActivePresetId('');
       setIsAttorneyDirectoryOpen(false);
       setNote('');
       setErrors({});
-    }
-  }, [editingTransaction, presetAttorneyTemplate, presetType, defaultDate, isOpen]);
+      setAiScanNotice(null);
+
+      if (editingTransaction) {
+        setType(editingTransaction.type);
+        setDate(editingTransaction.date);
+        setAmountStr(String(editingTransaction.amount));
+        setDocName(editingTransaction.docName || '');
+        setDocNumber(editingTransaction.docNumber || '');
+        setDocDate(editingTransaction.docDate || editingTransaction.date);
+        setDocStatus(editingTransaction.docStatus || 'original');
+        setAttachmentPath(editingTransaction.attachmentPath);
+        setExpenseCategory(editingTransaction.expenseCategory || 'col_9');
+        setSelectedAttorneyTemplateId('');
+        setActivePresetId('');
+        setIsAttorneyDirectoryOpen(false);
+        setNote(editingTransaction.note || '');
+        setErrors({});
+
+        if (editingTransaction.attachmentPath) {
+          loadReceiptImageDataUrl(editingTransaction.attachmentPath)
+            .then((url) => setAttachmentPreviewUrl(url))
+            .catch(() => setAttachmentPreviewUrl(null));
+        } else {
+          setAttachmentPreviewUrl(null);
+        }
+      } else if (scannedDocument) {
+        const docDateVal = scannedDocument.date || todayIso;
+        setType(scannedDocument.type || 'EXPENSE');
+        setDate(docDateVal);
+        setAmountStr(
+          scannedDocument.amount !== undefined && scannedDocument.amount > 0
+            ? String(scannedDocument.amount)
+            : ''
+        );
+        setDocName(scannedDocument.docName || 'Фіскальний чек');
+        setDocNumber(scannedDocument.docNumber || '');
+        setDocDate(scannedDocument.docDate || docDateVal);
+        setDocStatus(scannedDocument.docStatus || 'original');
+        setAttachmentPath(scannedDocument.attachmentPath);
+        setAttachmentPreviewUrl(scannedDocument.previewDataUrl);
+        setExpenseCategory(scannedDocument.expenseCategory || 'col_9');
+        setSelectedAttorneyTemplateId('');
+        setActivePresetId('');
+        setIsAttorneyDirectoryOpen(false);
+        setNote(scannedDocument.note || scannedDocument.counterparty || '');
+        setErrors({});
+        if (scannedDocument.scanError) {
+          setAiScanNotice({ type: 'error', text: scannedDocument.scanError });
+        } else {
+          setAiScanNotice({
+            type: 'success',
+            text: 'Дані первинного документа розпізнано через Google Gemini AI. Перевірте поля та збережіть запис.',
+          });
+        }
+      } else if (presetAttorneyTemplate) {
+        const initDate = defaultDate || new Date().toISOString().slice(0, 10);
+        setType('EXPENSE');
+        setDate(initDate);
+        setAmountStr('');
+        setDocName(presetAttorneyTemplate.defaultDocName);
+        setDocNumber('');
+        setDocDate(initDate);
+        setDocStatus('original');
+        setAttachmentPath(undefined);
+        setAttachmentPreviewUrl(null);
+        setExpenseCategory(presetAttorneyTemplate.category);
+        setSelectedAttorneyTemplateId(presetAttorneyTemplate.id);
+        setActivePresetId('');
+        setIsAttorneyDirectoryOpen(false);
+        setNote(presetAttorneyTemplate.fullText);
+        setErrors({});
+      } else {
+        const initDate = defaultDate || new Date().toISOString().slice(0, 10);
+        const initType: TransactionType = presetType || 'INCOME';
+        setType(initType);
+        setDate(initDate);
+        setAmountStr('');
+        setDocName(QUICK_DOC_NAMES[initType][0]);
+        setDocNumber('');
+        setDocDate(initDate);
+        setDocStatus('original');
+        setAttachmentPath(undefined);
+        setAttachmentPreviewUrl(null);
+        setExpenseCategory('col_9');
+        setSelectedAttorneyTemplateId('');
+        setActivePresetId('');
+        setIsAttorneyDirectoryOpen(false);
+        setNote('');
+        setErrors({});
+      }
+  }, [
+    editingTransaction,
+    scannedDocument,
+    presetAttorneyTemplate,
+    presetType,
+    defaultDate,
+    isOpen,
+  ]);
 
   if (!isOpen) return null;
 
@@ -242,6 +294,70 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
     }
   };
 
+  // AI-сканування фото чека / квитанції / акта безпосередньо у формі
+  const handleAiScanInModal = async () => {
+    setAiScanNotice(null);
+    let targetPath = attachmentPath || '';
+    let targetPreview = attachmentPreviewUrl || '';
+
+    if (!targetPreview) {
+      try {
+        const res = await captureOrPickReceiptPhoto('PROMPT');
+        targetPath = res.attachmentPath;
+        targetPreview = res.previewDataUrl;
+        setAttachmentPath(targetPath);
+        setAttachmentPreviewUrl(targetPreview);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.toLowerCase().includes('cancel')) return;
+        filePhotoInputRef.current?.click();
+        return;
+      }
+    }
+
+    setIsAiScanning(true);
+    try {
+      const cfg = getGeminiConfig(profile);
+      const recognized = await recognizeDocumentWithGemini({
+        base64Image: targetPreview,
+        attachmentPath: targetPath,
+        previewDataUrl: targetPreview,
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+      });
+
+      setType(recognized.type || 'EXPENSE');
+      if (recognized.date) setDate(recognized.date);
+      if (recognized.amount !== undefined && recognized.amount > 0) {
+        setAmountStr(String(recognized.amount));
+      }
+      if (recognized.docName) setDocName(recognized.docName);
+      if (recognized.docNumber) setDocNumber(recognized.docNumber);
+      if (recognized.docDate) setDocDate(recognized.docDate);
+      if (recognized.docStatus) setDocStatus(recognized.docStatus);
+      if (recognized.expenseCategory) setExpenseCategory(recognized.expenseCategory);
+      if (recognized.note || recognized.counterparty) {
+        setNote(recognized.note || recognized.counterparty || '');
+      }
+      setErrors({});
+      setAiScanNotice({
+        type: 'success',
+        text: 'Документ успішно розпізнано через Gemini Vision AI! Перевірте поля перед збереженням.',
+      });
+      await triggerLightHaptic();
+    } catch (err) {
+      setAiScanNotice({
+        type: 'error',
+        text:
+          err instanceof Error
+            ? err.message
+            : 'Не вдалося розпізнати документ. Заповніть поля вручну.',
+      });
+    } finally {
+      setIsAiScanning(false);
+    }
+  };
+
   const showRestrictedWarning = hasRestrictedAssetKeywords(note, docName);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -289,7 +405,7 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 overflow-y-auto print:hidden animate-fade-in">
-      <div className="w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[92dvh] flex flex-col animate-slide-up sm:animate-scale-in">
+      <div className="w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85dvh] flex flex-col animate-slide-up sm:animate-scale-in">
         {/* Шапка модалки */}
         <div className="flex items-center justify-between px-4 py-3.5 bg-slate-900 dark:bg-slate-950 text-white shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -350,6 +466,20 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
               })}
             </div>
           </div>
+
+          {/* Статус AI-розпізнавання документа */}
+          {aiScanNotice && (
+            <div
+              className={`flex items-start gap-2 p-2.5 rounded-xl border text-xs font-semibold break-words ${
+                aiScanNotice.type === 'success'
+                  ? 'bg-violet-50 dark:bg-violet-950/60 border-violet-300 dark:border-violet-800 text-violet-900 dark:text-violet-200'
+                  : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+              }`}
+            >
+              <ScanLine className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{aiScanNotice.text}</span>
+            </div>
+          )}
 
           {/* Індикатор ПДВ (п. 2 розд. II Порядку № 261) */}
           {profile.isVatPayer && (
@@ -515,7 +645,7 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                                 Графа {catInfo.colNumber}
                               </span>
                             </div>
-                            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug break-words">
                               {item.fullText}
                             </p>
                           </div>
@@ -566,11 +696,11 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                         >
                           {isSelected && <CheckCircle2 className="w-3 h-3" />}
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold text-slate-900 dark:text-slate-100 break-words">
                             {cat.shortTitle}
                           </div>
-                          <div className="text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-400 leading-tight mt-0.5">
+                          <div className="text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-400 leading-tight mt-0.5 break-words">
                             {cat.hint}
                           </div>
                         </div>
@@ -726,7 +856,20 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                   <span>Прикріпити фото чека / документа</span>
                 </span>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={isAiScanning}
+                    onClick={handleAiScanInModal}
+                    className="px-2.5 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1 shadow-2xs"
+                  >
+                    {isAiScanning ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <ScanLine className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isAiScanning ? 'AI-сканування...' : 'AI-скан з фото'}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleCaptureReceipt('CAMERA')}

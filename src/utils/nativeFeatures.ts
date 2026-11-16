@@ -48,13 +48,13 @@ export async function triggerWarningHaptic(): Promise<void> {
 // ============================================================================
 
 /**
- * Стискає зображення (DataURL) до оптимального розміру (макс. 1280px, JPEG 0.78)
- * для швидкого збереження у Directory.Data/receipts/.
+ * Стискає зображення (DataURL) до оптимального розміру (макс. 1280px, JPEG 0.8)
+ * для швидкого збереження у Directory.Data/receipts/ та відправки у Gemini Vision API.
  */
 async function compressImageDataUrl(
   rawDataUrl: string,
   maxDimension = 1280,
-  quality = 0.78
+  quality = 0.8
 ): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -92,15 +92,17 @@ async function compressImageDataUrl(
 
 /**
  * Зберігає стиснене зображення чека/документа у локальну файлову систему додатку
- * (`Directory.Data` у підпапку `receipts/`) та повертає відносний шлях `attachmentPath`.
+ * (`Directory.Data` у підпапку `receipts/`) та повертає відносний шлях `attachmentPath`
+ * і чистий Base64-рядок без префікса `data:image/jpeg;base64,`.
  */
 async function persistCompressedReceiptDataUrl(compressedDataUrl: string): Promise<{
   attachmentPath: string;
   previewDataUrl: string;
+  cleanBase64: string;
 }> {
-  const base64Data = compressedDataUrl.includes(',')
-    ? compressedDataUrl.split(',')[1]
-    : compressedDataUrl;
+  const cleanBase64 = compressedDataUrl
+    .replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '')
+    .trim();
 
   const fileName = `receipt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.jpg`;
   const relativePath = `receipts/${fileName}`;
@@ -108,7 +110,7 @@ async function persistCompressedReceiptDataUrl(compressedDataUrl: string): Promi
   try {
     await Filesystem.writeFile({
       path: relativePath,
-      data: base64Data,
+      data: cleanBase64,
       directory: Directory.Data,
       recursive: true,
     });
@@ -125,43 +127,60 @@ async function persistCompressedReceiptDataUrl(compressedDataUrl: string): Promi
   return {
     attachmentPath: relativePath,
     previewDataUrl: compressedDataUrl,
+    cleanBase64,
   };
 }
 
 /**
- * Викликає нативну камеру або галерею через `@capacitor/camera`,
- * стискає фото та записує у `Directory.Data/receipts/...`.
+ * Викликає нативну камеру, галерею або меню вибору (CameraSource.Prompt) через `@capacitor/camera`,
+ * стискає фото до 1280px (JPEG 0.8) та записує у `Directory.Data/receipts/...`.
  */
-export async function captureOrPickReceiptPhoto(sourceMode: 'CAMERA' | 'PHOTOS'): Promise<{
+export async function captureOrPickReceiptPhoto(
+  sourceMode: 'CAMERA' | 'PHOTOS' | 'PROMPT'
+): Promise<{
   attachmentPath: string;
   previewDataUrl: string;
+  cleanBase64: string;
 }> {
+  const resolvedSource =
+    sourceMode === 'PROMPT'
+      ? CameraSource.Prompt
+      : sourceMode === 'CAMERA'
+      ? CameraSource.Camera
+      : CameraSource.Photos;
+
   const photo = await Camera.getPhoto({
     quality: 80,
     allowEditing: false,
     resultType: CameraResultType.DataUrl,
-    source: sourceMode === 'CAMERA' ? CameraSource.Camera : CameraSource.Photos,
-    width: 1400,
-    height: 1400,
+    source: resolvedSource,
+    width: 1280,
+    height: 1280,
     correctOrientation: true,
+    webUseInput: !isNativeApp(),
+    promptLabelHeader: 'Сканування документа',
+    promptLabelCancel: 'Скасувати',
+    promptLabelPhoto: 'Обрати з галереї',
+    promptLabelPicture: 'Зробити фото',
   });
 
   if (!photo.dataUrl) {
     throw new Error('Не вдалося отримати зображення документа.');
   }
 
-  const compressed = await compressImageDataUrl(photo.dataUrl);
+  const compressed = await compressImageDataUrl(photo.dataUrl, 1280, 0.8);
   await triggerLightHaptic();
   return persistCompressedReceiptDataUrl(compressed);
 }
 
 /**
  * Обробляє вибір файлу зображення через стандартний `<input type="file">`,
- * стискає та зберігає у `Directory.Data/receipts/...`.
+ * стискає до 1280px (JPEG 0.8) та зберігає у `Directory.Data/receipts/...`.
  */
 export async function saveReceiptFromFile(file: File): Promise<{
   attachmentPath: string;
   previewDataUrl: string;
+  cleanBase64: string;
 }> {
   const rawDataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -170,7 +189,7 @@ export async function saveReceiptFromFile(file: File): Promise<{
     reader.readAsDataURL(file);
   });
 
-  const compressed = await compressImageDataUrl(rawDataUrl);
+  const compressed = await compressImageDataUrl(rawDataUrl, 1280, 0.8);
   await triggerLightHaptic();
   return persistCompressedReceiptDataUrl(compressed);
 }

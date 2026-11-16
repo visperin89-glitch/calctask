@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
@@ -7,6 +7,7 @@ import {
   BookOpen,
   Building2,
   Calendar,
+  Camera,
   Download,
   FileSpreadsheet,
   Fingerprint,
@@ -14,8 +15,11 @@ import {
   Moon,
   Plus,
   PlusCircle,
+  RefreshCw,
+  ScanLine,
   Settings,
   ShieldCheck,
+  Sparkles,
   Sun,
   X,
 } from 'lucide-react';
@@ -30,7 +34,7 @@ import {
   VAT_PAYER_REMINDER_TEXT,
 } from './constants/taxConstants';
 import { db, DEFAULT_PROFILE, ensureDefaultProfile } from './db/database';
-import type { TaxTransaction, TransactionType } from './types/tax';
+import type { ScannedDocumentResult, TaxTransaction, TransactionType } from './types/tax';
 import {
   type ApkDownloadProgress,
   checkForAppUpdate,
@@ -38,8 +42,14 @@ import {
   formatMegabytes,
   type UpdateCheckResult,
 } from './utils/appUpdater';
-import { verifyBiometricIdentity } from './utils/nativeFeatures';
+import { getGeminiConfig, recognizeDocumentWithGemini } from './utils/geminiScanner';
 import {
+  captureOrPickReceiptPhoto,
+  saveReceiptFromFile,
+  verifyBiometricIdentity,
+} from './utils/nativeFeatures';
+import {
+  configureNativeStatusBar,
   hideNativeSplashScreen,
   isNativeApp,
   registerAndroidBackButton,
@@ -65,7 +75,11 @@ export const App: React.FC = () => {
   const [presetAttorneyTemplate, setPresetAttorneyTemplate] =
     useState<AttorneyExpenseTemplate | null>(null);
   const [presetTransactionType, setPresetTransactionType] = useState<TransactionType | null>(null);
+  const [scannedDocument, setScannedDocument] = useState<ScannedDocumentResult | null>(null);
+  const [isAiScanningOverlay, setIsAiScanningOverlay] = useState<boolean>(false);
   const [openAssetModalKey, setOpenAssetModalKey] = useState<number>(0);
+
+  const scanFallbackInputRef = useRef<HTMLInputElement | null>(null);
 
   // Стан біометричного блокування (Блок 3.2)
   const [isBiometricLocked, setIsBiometricLocked] = useState<boolean>(false);
@@ -80,7 +94,33 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     applyThemeToDocument(theme);
+    configureNativeStatusBar(theme).catch(() => {});
   }, [theme]);
+
+  // Автоматичне прокручування до активного поля при відкритті екранної клавіатури
+  useEffect(() => {
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target;
+      const isFocusableInput =
+        (target instanceof HTMLInputElement &&
+          !['checkbox', 'radio', 'file', 'button', 'submit', 'reset'].includes(target.type)) ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement;
+
+      if (!isFocusableInput) return;
+
+      window.setTimeout(() => {
+        if (document.activeElement === target && typeof target.scrollIntoView === 'function') {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 220);
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+    };
+  }, []);
 
   useEffect(() => {
     ensureDefaultProfile()
@@ -159,6 +199,7 @@ export const App: React.FC = () => {
   const handleOpenNewTransaction = (initialType: TransactionType | null = null) => {
     setIsActionSheetOpen(false);
     setEditingTransaction(null);
+    setScannedDocument(null);
     setPresetAttorneyTemplate(null);
     setPresetTransactionType(initialType);
     setIsQuickModalOpen(true);
@@ -178,9 +219,80 @@ export const App: React.FC = () => {
 
   const handleEditTransaction = (tx: TaxTransaction) => {
     setEditingTransaction(tx);
+    setScannedDocument(null);
     setPresetAttorneyTemplate(null);
     setPresetTransactionType(null);
     setIsQuickModalOpen(true);
+  };
+
+  const processCapturedDocumentForAi = async (captured: {
+    attachmentPath: string;
+    previewDataUrl: string;
+    cleanBase64: string;
+  }) => {
+    setIsAiScanningOverlay(true);
+    try {
+      const cfg = getGeminiConfig(profile);
+      const recognized = await recognizeDocumentWithGemini({
+        base64Image: captured.cleanBase64 || captured.previewDataUrl,
+        attachmentPath: captured.attachmentPath,
+        previewDataUrl: captured.previewDataUrl,
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+      });
+
+      setEditingTransaction(null);
+      setPresetAttorneyTemplate(null);
+      setPresetTransactionType(null);
+      setScannedDocument(recognized);
+      setIsQuickModalOpen(true);
+    } catch (err) {
+      const errMsg =
+        err instanceof Error
+          ? err.message
+          : 'Не вдалося розпізнати документ через Gemini Vision API.';
+      setEditingTransaction(null);
+      setPresetAttorneyTemplate(null);
+      setPresetTransactionType('EXPENSE');
+      setScannedDocument({
+        type: 'EXPENSE',
+        attachmentPath: captured.attachmentPath,
+        previewDataUrl: captured.previewDataUrl,
+        scanError: `${errMsg} Фото документа прикріплено — заповніть суму та реквізити вручну.`,
+      });
+      setIsQuickModalOpen(true);
+    } finally {
+      setIsAiScanningOverlay(false);
+    }
+  };
+
+  const handleScanDocumentWithAi = async () => {
+    setIsActionSheetOpen(false);
+    try {
+      const captured = await captureOrPickReceiptPhoto('PROMPT');
+      await processCapturedDocumentForAi(captured);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.toLowerCase() : '';
+      if (msg.includes('cancel') || msg.includes('скас')) {
+        return;
+      }
+      scanFallbackInputRef.current?.click();
+    }
+  };
+
+  const handleFallbackScanFileSelected = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const captured = await saveReceiptFromFile(file);
+      await processCapturedDocumentForAi(captured);
+    } finally {
+      if (scanFallbackInputRef.current) {
+        scanFallbackInputRef.current.value = '';
+      }
+    }
   };
 
   const handleBiometricUnlock = async () => {
@@ -219,7 +331,7 @@ export const App: React.FC = () => {
   // Блок 3.2: Екран блокування із запитом нативної біометричної автентифікації
   if (isBiometricLocked) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-slate-950 text-white p-6">
+      <div className="min-h-[100dvh] w-full overflow-x-hidden flex items-center justify-center bg-slate-950 text-white p-6">
         <div className="w-full max-w-sm bg-slate-900 rounded-3xl border border-slate-800 p-6 text-center space-y-5 shadow-2xl">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-600/30">
             <Lock className="w-8 h-8" />
@@ -249,7 +361,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 safe-main-bottom md:pb-8 transition-colors duration-200 print:bg-white print:pb-0">
+    <div className="min-h-[100dvh] w-full overflow-x-hidden flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 safe-main-bottom md:pb-8 transition-colors duration-200 print:bg-white print:pb-0">
       {/* Головний навігаційний хедер (з підтримкою safe-area-inset-top для Android) */}
       <header className="sticky top-0 z-30 bg-slate-900 dark:bg-slate-950 text-white shadow-md border-b border-slate-800/80 safe-top print:hidden">
         <div className="max-w-7xl mx-auto px-3 sm:px-6">
@@ -436,7 +548,7 @@ export const App: React.FC = () => {
           onClick={() => setIsActionSheetOpen(false)}
         >
           <div
-            className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-2.5 safe-bottom animate-slide-up sm:animate-scale-in"
+            className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-2.5 max-h-[85dvh] overflow-y-auto safe-bottom animate-slide-up sm:animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-1 pb-1">
@@ -492,7 +604,27 @@ export const App: React.FC = () => {
               </div>
             </button>
 
-            {/* 3. Імпорт виписки з банку (CSV / XLSX) — Блок 4.3 */}
+            {/* 3. Сканувати чек / документ (AI) */}
+            <button
+              type="button"
+              onClick={handleScanDocumentWithAi}
+              className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-violet-50 to-fuchsia-50/70 dark:from-violet-950/60 dark:to-slate-900/90 hover:from-violet-100 hover:to-fuchsia-100/80 dark:hover:from-violet-900/60 border border-violet-200 dark:border-violet-800/80 hover:border-violet-400 flex items-center gap-3.5 text-left transition-all duration-200 active:scale-[0.98]"
+            >
+              <div className="w-11 h-11 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-sm shrink-0 relative">
+                <Camera className="w-5 h-5" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 absolute -top-1 -right-1" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <span className="truncate">Сканувати чек / документ (AI)</span>
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                  Камера або галерея • Автозаповнення через Gemini Vision
+                </div>
+              </div>
+            </button>
+
+            {/* 4. Імпорт виписки з банку (CSV / XLSX) — Блок 4.3 */}
             <button
               type="button"
               onClick={handleOpenBankStatementImport}
@@ -525,7 +657,7 @@ export const App: React.FC = () => {
       {/* Модальне вікно автоматичної пропозиції оновлення додатку */}
       {availableUpdate?.hasUpdate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 print:hidden animate-fade-in">
-          <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden p-5 space-y-4 animate-scale-in">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85dvh] overflow-y-auto p-5 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -635,27 +767,27 @@ export const App: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('JOURNAL')}
-          className={`flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition-colors ${
+          className={`flex flex-col items-center justify-center min-w-0 h-12 py-1 px-0.5 rounded-xl font-bold transition-colors ${
             activeTab === 'JOURNAL'
               ? 'text-blue-600 dark:text-sky-400 bg-blue-50/80 dark:bg-blue-950/60'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
-          <BookOpen className="w-5 h-5 mb-0.5" />
-          <span className="truncate max-w-full">Журнал</span>
+          <BookOpen className="w-5 h-5 mb-0.5 shrink-0" />
+          <span className="text-[11px] leading-tight truncate max-w-full">Журнал</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('ASSETS')}
-          className={`flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition-colors ${
+          className={`flex flex-col items-center justify-center min-w-0 h-12 py-1 px-0.5 rounded-xl font-bold transition-colors ${
             activeTab === 'ASSETS'
               ? 'text-blue-600 dark:text-sky-400 bg-blue-50/80 dark:bg-blue-950/60'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
-          <Building2 className="w-5 h-5 mb-0.5" />
-          <span className="truncate max-w-full">ОЗ / НА</span>
+          <Building2 className="w-5 h-5 mb-0.5 shrink-0" />
+          <span className="text-[11px] leading-tight truncate max-w-full">ОЗ / НА</span>
         </button>
 
         {/* Центральна синя кнопка «+» (відкриває ActionSheet) */}
@@ -677,38 +809,71 @@ export const App: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('REPORT')}
-          className={`flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition-colors ${
+          className={`flex flex-col items-center justify-center min-w-0 h-12 py-1 px-0.5 rounded-xl font-bold transition-colors ${
             activeTab === 'REPORT'
               ? 'text-blue-600 dark:text-sky-400 bg-blue-50/80 dark:bg-blue-950/60'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
-          <FileSpreadsheet className="w-5 h-5 mb-0.5" />
-          <span className="truncate max-w-full">Звіт</span>
+          <FileSpreadsheet className="w-5 h-5 mb-0.5 shrink-0" />
+          <span className="text-[11px] leading-tight truncate max-w-full">Звіт</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('SETTINGS')}
-          className={`flex flex-col items-center justify-center py-1 rounded-xl text-[10px] font-bold transition-colors ${
+          className={`flex flex-col items-center justify-center min-w-0 h-12 py-1 px-0.5 rounded-xl font-bold transition-colors ${
             activeTab === 'SETTINGS'
               ? 'text-blue-600 dark:text-sky-400 bg-blue-50/80 dark:bg-blue-950/60'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
-          <Settings className="w-5 h-5 mb-0.5" />
-          <span className="truncate max-w-full">Профіль</span>
+          <Settings className="w-5 h-5 mb-0.5 shrink-0" />
+          <span className="text-[11px] leading-tight truncate max-w-full">Профіль</span>
         </button>
       </nav>
+
+      {/* Прихований fallback інпут для вибору фото чека на Web */}
+      <input
+        ref={scanFallbackInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFallbackScanFileSelected}
+        className="hidden"
+      />
+
+      {/* Оверлей індикатора розпізнавання документа через Gemini Vision AI */}
+      {isAiScanningOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 print:hidden animate-fade-in">
+          <div className="w-full max-w-xs bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-6 text-center space-y-4 shadow-2xl animate-scale-in">
+            <div className="w-14 h-14 rounded-2xl bg-violet-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-violet-600/30 relative">
+              <ScanLine className="w-7 h-7 animate-pulse" />
+              <RefreshCw className="w-4 h-4 animate-spin absolute -bottom-1 -right-1 bg-slate-900 rounded-full p-0.5 text-sky-400" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                AI-розпізнавання документа...
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Google Gemini Vision аналізує суму, дату, реквізити чека та категорію витрат № 261
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модальне вікно швидкого введення операцій */}
       <QuickInputModal
         isOpen={isQuickModalOpen}
-        onClose={() => setIsQuickModalOpen(false)}
+        onClose={() => {
+          setIsQuickModalOpen(false);
+          setScannedDocument(null);
+        }}
         profile={profile}
         editingTransaction={editingTransaction}
         presetAttorneyTemplate={presetAttorneyTemplate}
         presetType={presetTransactionType}
+        scannedDocument={scannedDocument}
       />
 
       {/* Модальне вікно розумного парсера банківських виписок (CSV / XLSX) */}

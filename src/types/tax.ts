@@ -39,6 +39,25 @@ export interface TaxProfile {
   taxRemindersEnabled?: boolean; // Локальні пуш-сповіщення про податкові дедлайни
   // Користувацькі шаблони швидких операцій (Блок 4)
   customPresets?: QuickOperationPreset[];
+  // Налаштування AI-сканера документів (Google Gemini Vision API)
+  geminiApiKey?: string;
+  geminiModel?: string;
+}
+
+export interface ScannedDocumentResult {
+  type: TransactionType;
+  amount?: number;
+  date?: string; // YYYY-MM-DD
+  docName?: string;
+  docNumber?: string;
+  docDate?: string; // YYYY-MM-DD
+  expenseCategory?: ExpenseCategory;
+  docStatus?: DocumentStatus;
+  counterparty?: string;
+  note?: string;
+  attachmentPath: string;
+  previewDataUrl: string;
+  scanError?: string;
 }
 
 export interface TaxTransaction {

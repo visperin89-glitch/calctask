@@ -213,7 +213,7 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 overflow-y-auto print:hidden animate-fade-in">
-      <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[92dvh] flex flex-col animate-slide-up sm:animate-scale-in">
+      <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85dvh] flex flex-col animate-slide-up sm:animate-scale-in">
         {/* Шапка */}
         <div className="flex items-center justify-between px-4 py-3.5 bg-slate-900 dark:bg-slate-950 text-white shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -413,28 +413,30 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
               </div>
 
               {/* Зведення попереднього перегляду */}
-              <div className="grid grid-cols-3 gap-2.5">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                  <div className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+                <div className="min-w-0 p-2.5 sm:p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                  <div className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 truncate">
                     Обрано записів
                   </div>
-                  <div className="text-sm sm:text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">
+                  <div className="text-sm xs:text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-0.5 truncate">
                     {selectedRows.length} з {previewRows.length}
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/70">
-                  <div className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                    <ArrowUpRight className="w-3.5 h-3.5" /> Доходи (Гр. 4)
+                <div className="min-w-0 p-2.5 sm:p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/70">
+                  <div className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 flex items-center gap-1 min-w-0">
+                    <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Доходи (Гр. 4)</span>
                   </div>
-                  <div className="text-sm sm:text-lg font-extrabold text-emerald-700 dark:text-emerald-300 mt-0.5 truncate">
+                  <div className="text-sm xs:text-base sm:text-lg font-bold text-emerald-700 dark:text-emerald-300 mt-0.5 truncate">
                     +{formatCurrency(totalIncome)} ₴
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/70">
-                  <div className="text-[10px] font-bold uppercase text-rose-700 dark:text-rose-400 flex items-center gap-1">
-                    <ArrowDownRight className="w-3.5 h-3.5" /> Витрати (Гр. 6–9)
+                <div className="min-w-0 p-2.5 sm:p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/70">
+                  <div className="text-[10px] font-bold uppercase text-rose-700 dark:text-rose-400 flex items-center gap-1 min-w-0">
+                    <ArrowDownRight className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Витрати (Гр. 6–9)</span>
                   </div>
-                  <div className="text-sm sm:text-lg font-extrabold text-rose-700 dark:text-rose-300 mt-0.5 truncate">
+                  <div className="text-sm xs:text-base sm:text-lg font-bold text-rose-700 dark:text-rose-300 mt-0.5 truncate">
                     −{formatCurrency(totalExpense)} ₴
                   </div>
                 </div>
@@ -498,12 +500,12 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
                               {formatCurrency(row.amount)} ₴
                             </span>
                             {row.counterparty && (
-                              <span className="text-slate-500 dark:text-slate-400 truncate">
+                              <span className="text-slate-500 dark:text-slate-400 break-words">
                                 • {row.counterparty}
                               </span>
                             )}
                           </div>
-                          <div className="text-slate-700 dark:text-slate-300 line-clamp-2">
+                          <div className="text-slate-700 dark:text-slate-300 line-clamp-2 break-words">
                             {row.description}
                           </div>
                         </div>

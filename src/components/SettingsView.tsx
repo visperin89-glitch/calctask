@@ -8,18 +8,24 @@ import {
   ChevronRight,
   Database,
   Download,
+  Eye,
+  EyeOff,
   Fingerprint,
+  Info,
+  KeyRound,
   Moon,
   Plus,
   RefreshCw,
   RotateCcw,
   Save,
+  ScanLine,
   ShieldCheck,
   Sparkles,
   Sun,
   Trash2,
   Upload,
   UserCheck,
+  Wifi,
 } from 'lucide-react';
 import {
   DEFAULT_OPERATION_PRESETS,
@@ -47,6 +53,13 @@ import {
   importDatabaseFromJson,
   seedDemoData,
 } from '../utils/backup';
+import {
+  DEFAULT_GEMINI_API_KEY,
+  DEFAULT_GEMINI_MODEL,
+  getGeminiConfig,
+  saveGeminiConfig,
+  testGeminiConnection,
+} from '../utils/geminiScanner';
 import {
   cancelTaxCalendarNotifications,
   scheduleTaxCalendarNotifications,
@@ -76,7 +89,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onChangeTheme,
   onUpdateFound,
 }) => {
-  const [activeSubScreen, setActiveSubScreen] = useState<'NONE' | 'PROFILE' | 'PRESETS'>('NONE');
+  const [activeSubScreen, setActiveSubScreen] = useState<
+    'NONE' | 'PROFILE' | 'PRESETS' | 'AI_SCANNER'
+  >('NONE');
+
+  // Налаштування AI-розпізнавання документів (Google Gemini Vision API)
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => getGeminiConfig(profile).apiKey);
+  const [geminiModel, setGeminiModel] = useState<string>(() => getGeminiConfig(profile).model);
+  const [showGeminiKey, setShowGeminiKey] = useState<boolean>(false);
+  const [isTestingGemini, setIsTestingGemini] = useState<boolean>(false);
+  const [geminiTestResult, setGeminiTestResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
   // Реквізити платника та податкові параметри
   const [fullName, setFullName] = useState(profile.fullName);
@@ -131,6 +156,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         ? profile.customPresets
         : DEFAULT_OPERATION_PRESETS
     );
+    const geminiCfg = getGeminiConfig(profile);
+    setGeminiApiKey(geminiCfg.apiKey);
+    setGeminiModel(geminiCfg.model);
   }, [profile]);
 
   const showNotice = (type: 'success' | 'error', text: string) => {
@@ -163,6 +191,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     await triggerLightHaptic();
     showNotice('success', 'Реквізити платника та податкові параметри успішно збережено.');
     setActiveSubScreen('NONE');
+  };
+
+  const handleSaveGeminiSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const saved = await saveGeminiConfig(geminiApiKey, geminiModel, profile);
+    setGeminiApiKey(saved.apiKey);
+    setGeminiModel(saved.model);
+    await triggerLightHaptic();
+    showNotice('success', 'Налаштування AI-розпізнавання (Google Gemini API) збережено.');
+    setActiveSubScreen('NONE');
+  };
+
+  const handleTestGeminiConnection = async () => {
+    setIsTestingGemini(true);
+    setGeminiTestResult(null);
+    try {
+      const res = await testGeminiConnection(geminiApiKey, geminiModel);
+      setGeminiTestResult({ ok: res.ok, message: res.message });
+      if (res.ok) {
+        await triggerLightHaptic();
+      }
+    } finally {
+      setIsTestingGemini(false);
+    }
   };
 
   // Блок 3.2: Біометричний захист входу
@@ -414,7 +466,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>Назад до налаштувань</span>
         </button>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 sm:p-6 border border-slate-200 dark:border-slate-700/80 shadow-xs">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700/80 shadow-xs max-h-[85dvh] overflow-y-auto">
           <div className="flex items-center gap-2.5 mb-5">
             <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-sky-400">
               <UserCheck className="w-5 h-5" />
@@ -585,7 +637,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </label>
             </div>
 
-            <div className="pt-2 flex items-center gap-2.5">
+            <div className="pt-2 pb-4 flex items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => setActiveSubScreen('NONE')}
@@ -622,9 +674,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>Назад до налаштувань</span>
         </button>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-4 max-h-[85dvh] overflow-y-auto">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
                 Шаблони повторюваних операцій (Пресети)
               </h2>
@@ -635,7 +687,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <button
               type="button"
               onClick={handleResetDefaultPresets}
-              className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1"
+              className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1 shrink-0"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Стандартні</span>
@@ -648,11 +700,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 key={p.id}
                 className="p-3 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/40"
               >
-                <div className="min-w-0">
-                  <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white break-words">
                     {p.title}
                   </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 break-words">
                     {p.defaultDocName} • {p.defaultNote}
                   </div>
                 </div>
@@ -682,12 +734,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 placeholder="Назва кнопки (напр. Оплата LIGA360)"
                 value={newPresetTitle}
                 onChange={(e) => setNewPresetTitle(e.target.value)}
-                className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-900 dark:text-white"
+                className="w-full min-w-0 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-900 dark:text-white"
               />
               <select
                 value={newPresetCategory}
                 onChange={(e) => setNewPresetCategory(e.target.value as ExpenseCategory)}
-                className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-900 dark:text-white"
+                className="w-full min-w-0 max-w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-900 dark:text-white"
               >
                 {EXPENSE_CATEGORIES.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -719,6 +771,179 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <Plus className="w-4 h-4" />
               <span>Додати пресет</span>
             </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // СУБ-ЕКРАН 3: «AI-розпізнавання документів (Gemini API)»
+  // =========================================================================
+  if (activeSubScreen === 'AI_SCANNER') {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
+        <button
+          type="button"
+          onClick={() => {
+            setGeminiTestResult(null);
+            setActiveSubScreen('NONE');
+          }}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+        >
+          <ArrowLeft className="w-4 h-4 text-blue-600 dark:text-sky-400" />
+          <span>Назад до налаштувань</span>
+        </button>
+
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700/80 shadow-xs max-h-[85dvh] overflow-y-auto space-y-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 rounded-xl bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 shrink-0">
+              <ScanLine className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white break-words">
+                AI-розпізнавання документів (Gemini API)
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 break-words">
+                Автоматичне зчитування чеків, квитанцій, актів і рахунків з фото через Google Gemini Vision
+              </p>
+            </div>
+          </div>
+
+          {/* Повідомлення про конфіденційність (Privacy Notice) */}
+          <div className="p-3.5 rounded-xl bg-blue-50/90 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/80 flex items-start gap-2.5 text-xs text-blue-950 dark:text-blue-100 leading-relaxed">
+            <Info className="w-4 h-4 text-blue-600 dark:text-sky-400 shrink-0 mt-0.5" />
+            <div className="min-w-0 break-words">
+              <strong className="block mb-0.5">Повідомлення про конфіденційність (Privacy Notice)</strong>
+              Під час сканування фото первинного документа передається зашифрованим HTTPS-з’єднанням у хмарний API Google для розпізнавання тексту, тоді як усі інші фінансові записи, база транзакцій, ОЗ/НА та звіти залишаються 100% офлайн на вашому смартфоні.
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveGeminiSettings} className="space-y-4">
+            {/* Поле API-ключ Google Gemini */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                  <span>API-ключ Google Gemini</span>
+                </label>
+                {(geminiApiKey || DEFAULT_GEMINI_API_KEY) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGeminiApiKey(DEFAULT_GEMINI_API_KEY);
+                      setGeminiTestResult(null);
+                    }}
+                    className="text-[11px] font-bold text-blue-600 dark:text-sky-400 hover:underline"
+                  >
+                    {DEFAULT_GEMINI_API_KEY ? 'Ключ за замовчуванням' : 'Очистити'}
+                  </button>
+                )}
+              </div>
+              <div className="relative flex items-center">
+                <input
+                  type={showGeminiKey ? 'text' : 'password'}
+                  placeholder="Введіть API-ключ Google Gemini..."
+                  value={geminiApiKey}
+                  onChange={(e) => {
+                    setGeminiApiKey(e.target.value);
+                    setGeminiTestResult(null);
+                  }}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 pl-3.5 pr-11 py-2.5 text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowGeminiKey((prev) => !prev)}
+                  aria-label={showGeminiKey ? 'Приховати API-ключ' : 'Показати API-ключ'}
+                  className="absolute right-2 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                >
+                  {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 break-words">
+                Зберігається локально на вашому пристрої та може бути змінений у будь-який момент без оновлення APK.
+              </p>
+            </div>
+
+            {/* Поле Модель Gemini */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                  Модель Gemini
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGeminiModel(DEFAULT_GEMINI_MODEL);
+                    setGeminiTestResult(null);
+                  }}
+                  className="text-[11px] font-bold text-blue-600 dark:text-sky-400 hover:underline"
+                >
+                  За замовчуванням ({DEFAULT_GEMINI_MODEL})
+                </button>
+              </div>
+              <input
+                type="text"
+                placeholder={DEFAULT_GEMINI_MODEL}
+                value={geminiModel}
+                onChange={(e) => {
+                  setGeminiModel(e.target.value);
+                  setGeminiTestResult(null);
+                }}
+                className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-mono font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-600"
+              />
+            </div>
+
+            {/* Перевірка підключення */}
+            <div className="space-y-2.5 pt-1">
+              <button
+                type="button"
+                disabled={isTestingGemini}
+                onClick={handleTestGeminiConnection}
+                className="w-full py-2.5 px-4 rounded-xl border border-violet-300 dark:border-violet-700 bg-violet-50/80 dark:bg-violet-950/50 text-violet-800 dark:text-violet-200 text-xs sm:text-sm font-bold hover:bg-violet-100 dark:hover:bg-violet-900/50 disabled:opacity-60 flex items-center justify-center gap-2 transition-colors"
+              >
+                {isTestingGemini ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Wifi className="w-4 h-4" />
+                )}
+                <span>
+                  {isTestingGemini ? 'Перевірка підключення...' : 'Перевірити підключення'}
+                </span>
+              </button>
+
+              {geminiTestResult && (
+                <div
+                  className={`p-3 rounded-xl border text-xs font-semibold break-words ${
+                    geminiTestResult.ok
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                      : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+                  }`}
+                >
+                  {geminiTestResult.message}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 pb-4 flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setGeminiTestResult(null);
+                  setActiveSubScreen('NONE');
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                Скасувати
+              </button>
+              <button
+                type="submit"
+                className="flex-2 py-2.5 px-5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-colors"
+              >
+                <Save className="w-4 h-4" />
+                <span>Зберегти налаштування AI</span>
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -795,16 +1020,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-hidden divide-y divide-slate-200 dark:divide-slate-700/70">
           {/* 2.1. Тема оформлення */}
-          <div className="p-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="p-2 rounded-xl bg-amber-50 dark:bg-indigo-950/70 text-amber-600 dark:text-indigo-400 shrink-0">
                 {theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm font-bold text-slate-900 dark:text-white">
                   Тема оформлення
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
+                <div className="text-xs text-slate-500 dark:text-slate-400 break-words">
                   {theme === 'dark'
                     ? 'Темна (графітово-чорна палітра)'
                     : 'Світла (класична палітра)'}
@@ -891,6 +1116,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                   Активних шаблонів: {presets.length} (ЄСВ, Оренда, Інтернет, РКО, Канцтовари...)
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
+          </button>
+
+          {/* 2.4. AI-розпізнавання документів (Google Gemini Vision API) */}
+          <button
+            type="button"
+            onClick={() => {
+              setGeminiTestResult(null);
+              setActiveSubScreen('AI_SCANNER');
+            }}
+            className="w-full p-4 flex items-center justify-between gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 rounded-xl bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 shrink-0">
+                <ScanLine className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-slate-900 dark:text-white break-words">
+                  AI-розпізнавання документів (Gemini API)
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  Модель: {geminiModel || DEFAULT_GEMINI_MODEL} •{' '}
+                  {geminiApiKey.trim() ? 'Ключ налаштовано' : 'Введіть API-ключ'}
                 </div>
               </div>
             </div>
@@ -1109,7 +1360,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           {updateInfo?.hasUpdate && (
             <div className="p-3.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold space-y-2.5 shadow-sm">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>
                   Доступна версія <strong>{updateInfo.latestVersion}</strong>
                 </span>
