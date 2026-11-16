@@ -103,17 +103,30 @@ html.dark textarea::placeholder {
   color: #64748b;
 }
 
-/* Безпечні відступи для системних панелей Android / iOS */
+:root {
+  --ime-padding-bottom: 0px;
+}
+
+/* Безпечні відступи для системних панелей Android / iOS (вертикальні та горизонтальні) + IME */
 .safe-top {
   padding-top: max(env(safe-area-inset-top, 0px), 12px);
+}
+
+.safe-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
 }
 
+.ime-safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--ime-padding-bottom, 0px), 12px);
+}
+
 .safe-main-bottom {
-  padding-bottom: calc(5.5rem + max(env(safe-area-inset-bottom, 0px), 8px));
+  padding-bottom: calc(5.5rem + max(env(safe-area-inset-bottom, 0px), var(--ime-padding-bottom, 0px), 8px));
 }
 
 @media print {

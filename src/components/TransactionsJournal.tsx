@@ -250,9 +250,11 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
   };
 
   return (
-    <div className="space-y-3.5 sm:space-y-5 w-full animate-fade-in">
-      {/* Зведені картки аналітики (4 картки: ДОХІД, ВИТРАТИ, ЧИСТИЙ ДОХІД, ПОВЕРНЕННЯ) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+    <div className="flex flex-col lg:flex-row lg:items-start gap-3.5 sm:gap-5 w-full animate-fade-in">
+      {/* Ліва панель: зведені картки аналітики та фільтри (фіксована ширина на lg+) */}
+      <div className="w-full lg:w-[360px] xl:w-[400px] shrink-0 space-y-3.5 lg:sticky lg:top-20">
+        {/* Зведені картки аналітики (4 картки: ДОХІД, ВИТРАТИ, ЧИСТИЙ ДОХІД, ПОВЕРНЕННЯ) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-2.5 sm:gap-3">
         {/* 1. ДОХІД (ГР. 4) */}
         <div className="min-w-0 bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-200 active:scale-[0.98]">
           <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -340,9 +342,9 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
 
       {/* Панель фільтрів, контролю первинки та імпорту банківської виписки */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl p-3.5 sm:p-4 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-3 transition-colors duration-200">
-        <div className="flex flex-col md:flex-row gap-2.5 sm:gap-3">
+        <div className="flex flex-col md:flex-row lg:flex-col gap-2.5 sm:gap-3">
           {/* Пошук за документом / приміткою */}
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -354,7 +356,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
           </div>
 
           {/* Фільтр за місяцем */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <Calendar className="w-4 h-4 text-slate-500 shrink-0 hidden sm:block" />
             <select
               value={selectedMonth}
@@ -362,7 +364,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
                 const val = e.target.value;
                 setSelectedMonth(val === 'ALL' ? 'ALL' : Number(val));
               }}
-              className="w-full sm:w-auto rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full md:w-auto lg:w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
               <option value="ALL">Усі місяці ({selectedYear})</option>
               {UKRAINIAN_MONTHS.map((m) => (
@@ -374,7 +376,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
           </div>
 
           {/* Фільтр за типом операції */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <Filter className="w-4 h-4 text-slate-500 shrink-0 hidden sm:block" />
             <select
               value={selectedType}
@@ -385,7 +387,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
                   setSelectedCategory('ALL');
                 }
               }}
-              className="w-full sm:w-auto rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full md:w-auto lg:w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
               <option value="ALL">Усі типи операцій</option>
               <option value="INCOME">Доходи (Графа 2)</option>
@@ -399,7 +401,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value as ExpenseCategory | 'ALL')}
-              className="w-full sm:w-auto rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full md:w-auto lg:w-full rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
               <option value="ALL">Усі категорії витрат (Гр. 6–9)</option>
               {EXPENSE_CATEGORIES.map((cat) => (
@@ -472,9 +474,10 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
           </span>
         </div>
       </div>
+      </div>
 
-      {/* Віртуалізований список операцій Журналу (@tanstack/react-virtual) */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-hidden transition-colors duration-200">
+      {/* Права панель: гнучкий віртуалізований список операцій Журналу (@tanstack/react-virtual) */}
+      <div className="flex-1 min-w-0 w-full flex flex-col bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-hidden transition-colors duration-200">
         {filteredTransactions.length === 0 ? (
           <div className="p-10 text-center space-y-2.5">
             <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-900 text-slate-400 flex items-center justify-center mx-auto">
@@ -490,7 +493,7 @@ export const TransactionsJournal: React.FC<TransactionsJournalProps> = ({
         ) : (
           <div
             ref={parentScrollRef}
-            className="max-h-[68dvh] overflow-y-auto overscroll-contain"
+            className="flex-1 min-h-[180px] max-h-[calc(100dvh-10.5rem)] lg:max-h-[calc(100dvh-7.5rem)] overflow-y-auto overscroll-contain"
           >
             <div
               style={{

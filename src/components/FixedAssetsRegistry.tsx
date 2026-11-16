@@ -384,7 +384,7 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
           </div>
 
           {/* Десктопна таблиця розрахунку за 12 графами */}
-          <div className="hidden md:block bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-x-auto">
+          <div className="hidden xl:block bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs overflow-x-auto">
             <table className="w-full text-xs border-collapse min-w-[1000px]">
               <thead>
                 <tr className="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-bold text-center border-b border-slate-300 dark:border-slate-700">
@@ -449,8 +449,8 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
 
       {/* Модальне вікно створення / редагування об'єкта ОЗ/НА */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 overflow-y-auto animate-fade-in">
-          <div className="w-full max-w-xl bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85dvh] flex flex-col animate-slide-up sm:animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 safe-x overflow-y-auto animate-fade-in">
+          <div className="w-full max-w-xl md:max-w-2xl bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85dvh] flex flex-col animate-slide-up sm:animate-scale-in">
             <div className="flex items-center justify-between px-4 py-3.5 bg-slate-900 dark:bg-slate-950 text-white">
               <div className="flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-sky-400" />
@@ -673,7 +673,7 @@ export const FixedAssetsRegistry: React.FC<FixedAssetsRegistryProps> = ({
                 </span>
               </label>
 
-              <div className="flex items-center gap-2.5 pt-2 safe-bottom">
+              <div className="flex items-center gap-2.5 pt-2 ime-safe-bottom">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}

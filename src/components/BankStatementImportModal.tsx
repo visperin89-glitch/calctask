@@ -212,7 +212,7 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 overflow-y-auto print:hidden animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 safe-x overflow-y-auto print:hidden animate-fade-in">
       <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85dvh] flex flex-col animate-slide-up sm:animate-scale-in">
         {/* Шапка */}
         <div className="flex items-center justify-between px-4 py-3.5 bg-slate-900 dark:bg-slate-950 text-white shrink-0">
@@ -460,11 +460,11 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
                   <span>Перевірте класифікацію перед записом</span>
                 </div>
 
-                <div className="divide-y divide-slate-200 dark:divide-slate-700 max-h-64 overflow-y-auto">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 p-2.5 max-h-[45dvh] overflow-y-auto bg-slate-50/40 dark:bg-slate-900/30">
                   {previewRows.map((row) => (
                     <div
                       key={row.rowIndex}
-                      className={`p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs ${
+                      className={`p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 flex flex-col sm:flex-row lg:flex-col sm:items-center lg:items-stretch justify-between gap-2.5 text-xs ${
                         row.selected
                           ? 'bg-white dark:bg-slate-800'
                           : 'bg-slate-50/60 dark:bg-slate-900/40 opacity-60'
@@ -533,7 +533,7 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
                                 e.target.value as ExpenseCategory
                               )
                             }
-                            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-800 dark:text-slate-200 max-w-[175px]"
+                            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-800 dark:text-slate-200 max-w-full sm:max-w-xs"
                           >
                             {EXPENSE_CATEGORIES.map((c) => (
                               <option key={c.id} value={c.id}>
@@ -552,7 +552,7 @@ export const BankStatementImportModal: React.FC<BankStatementImportModalProps> =
         </div>
 
         {/* Нижня панель дій */}
-        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 shrink-0 safe-bottom">
+        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 shrink-0 ime-safe-bottom">
           <button
             type="button"
             onClick={onClose}

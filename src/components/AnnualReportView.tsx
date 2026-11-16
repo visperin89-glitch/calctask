@@ -334,7 +334,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="md:hidden inline-flex w-full sm:w-auto rounded-xl bg-blue-50 dark:bg-slate-900 p-1 border border-blue-200 dark:border-slate-700 text-[11px] font-bold">
+              <div className="xl:hidden inline-flex w-full sm:w-auto rounded-xl bg-blue-50 dark:bg-slate-900 p-1 border border-blue-200 dark:border-slate-700 text-[11px] font-bold">
                 <button
                   type="button"
                   onClick={() => setMobileViewMode('FIT')}
@@ -861,9 +861,9 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
             </div>
           </div>
 
-          {/* МОБІЛЬНИЙ АДАПТИВНИЙ ВИГЛЯД */}
+          {/* МОБІЛЬНИЙ ТА ПЛАНШЕТНИЙ АДАПТИВНИЙ ВИГЛЯД */}
           {mobileViewMode === 'FIT' && (
-            <div className="md:hidden space-y-4 print:hidden">
+            <div className="xl:hidden grid grid-cols-1 md:grid-cols-2 gap-4 items-start print:hidden">
               {annualReport.quarters.map((qBlock) => {
                 const qTotalExp =
                   qBlock.quarterTotals.col6_tmc +
@@ -1022,7 +1022,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
           {/* ПОВНА РЕГЛАМЕНТОВАНА ТАБЛИЦЯ З 11 ГРАФ */}
           <div
             className={`${
-              mobileViewMode === 'FIT' ? 'hidden md:block print:block' : 'block'
+              mobileViewMode === 'FIT' ? 'hidden xl:block print:block' : 'block'
             } overflow-x-auto w-full`}
           >
             <table className="w-full text-[11px] border-collapse border border-slate-400 min-w-[980px]">
@@ -1206,54 +1206,56 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
           </div>
 
           {mobileViewMode === 'FIT' && (
-            <div className="md:hidden space-y-2.5 print:hidden">
+            <div className="xl:hidden space-y-3 print:hidden">
               {amortizationReport.rows.length === 0 ? (
                 <div className="p-4 text-center text-xs text-slate-400 italic border border-slate-200 rounded-xl">
                   Об’єкти ОЗ / НА у {selectedYear} році відсутні
                 </div>
               ) : (
-                amortizationReport.rows.map((row) => (
-                  <div
-                    key={row.index}
-                    className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="font-bold text-slate-900 break-words min-w-0">
-                        #{row.index}. {row.col3_assetName}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-bold text-[11px] shrink-0">
-                        Гр. 11: {formatCurrency(row.col11_yearAmortization)} ₴
-                      </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                  {amortizationReport.rows.map((row) => (
+                    <div
+                      key={row.index}
+                      className="min-w-0 p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-bold text-slate-900 break-words min-w-0">
+                          #{row.index}. {row.col3_assetName}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-bold text-[11px] shrink-0">
+                          Гр. 11: {formatCurrency(row.col11_yearAmortization)} ₴
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 break-words">{row.col2_groupName}</div>
+                      <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-white p-2 rounded-lg border border-slate-200">
+                        <div className="min-w-0 truncate">
+                          <span className="text-slate-500">Гр. 7 (Первісна):</span>{' '}
+                          <strong>{formatCurrency(row.col7_initialCost)}</strong>
+                        </div>
+                        <div className="min-w-0 truncate">
+                          <span className="text-slate-500">Гр. 6 (Строк):</span>{' '}
+                          <strong>{row.col6_usefulLifeYears} р.</strong>
+                        </div>
+                        <div className="min-w-0 truncate">
+                          <span className="text-slate-500">Гр. 8 (Річна):</span>{' '}
+                          <strong>{formatCurrency(row.col8_annualAmount)}</strong>
+                        </div>
+                        <div className="min-w-0 truncate">
+                          <span className="text-slate-500">Гр. 9 (Місячна):</span>{' '}
+                          <strong>{formatCurrency(row.col9_monthlyAmount)}</strong>
+                        </div>
+                        <div className="min-w-0 truncate">
+                          <span className="text-slate-500">Гр. 10 (На поч.):</span>{' '}
+                          <strong>{formatCurrency(row.col10_startPeriodValue)}</strong>
+                        </div>
+                        <div className="min-w-0 truncate">
+                          <span className="text-slate-500">Гр. 12 (На кін.):</span>{' '}
+                          <strong>{formatCurrency(row.col12_endPeriodValue)}</strong>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-[11px] text-slate-600 break-words">{row.col2_groupName}</div>
-                    <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-white p-2 rounded-lg border border-slate-200">
-                      <div className="min-w-0 truncate">
-                        <span className="text-slate-500">Гр. 7 (Первісна):</span>{' '}
-                        <strong>{formatCurrency(row.col7_initialCost)}</strong>
-                      </div>
-                      <div className="min-w-0 truncate">
-                        <span className="text-slate-500">Гр. 6 (Строк):</span>{' '}
-                        <strong>{row.col6_usefulLifeYears} р.</strong>
-                      </div>
-                      <div className="min-w-0 truncate">
-                        <span className="text-slate-500">Гр. 8 (Річна):</span>{' '}
-                        <strong>{formatCurrency(row.col8_annualAmount)}</strong>
-                      </div>
-                      <div className="min-w-0 truncate">
-                        <span className="text-slate-500">Гр. 9 (Місячна):</span>{' '}
-                        <strong>{formatCurrency(row.col9_monthlyAmount)}</strong>
-                      </div>
-                      <div className="min-w-0 truncate">
-                        <span className="text-slate-500">Гр. 10 (На поч.):</span>{' '}
-                        <strong>{formatCurrency(row.col10_startPeriodValue)}</strong>
-                      </div>
-                      <div className="min-w-0 truncate">
-                        <span className="text-slate-500">Гр. 12 (На кін.):</span>{' '}
-                        <strong>{formatCurrency(row.col12_endPeriodValue)}</strong>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
 
               <div className="p-3 rounded-xl bg-blue-100/80 border border-blue-300 text-xs font-extrabold text-blue-950 flex flex-wrap justify-between gap-1">
@@ -1266,7 +1268,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
           {/* Повна таблиця 12 граф Додатка */}
           <div
             className={`${
-              mobileViewMode === 'FIT' ? 'hidden md:block print:block' : 'block'
+              mobileViewMode === 'FIT' ? 'hidden xl:block print:block' : 'block'
             } overflow-x-auto w-full`}
           >
             <table className="w-full text-[11px] border-collapse border border-slate-400 min-w-[980px]">

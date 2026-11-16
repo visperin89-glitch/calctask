@@ -122,6 +122,39 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  // Відстеження висоти екранної клавіатури через VisualViewport для --ime-padding-bottom
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const rootStyle = document.documentElement.style;
+
+    const updateImePadding = () => {
+      const vv = window.visualViewport;
+      if (!vv) {
+        rootStyle.setProperty('--ime-padding-bottom', '0px');
+        return;
+      }
+      const keyboardHeight = Math.max(
+        0,
+        Math.round(window.innerHeight - vv.height - vv.offsetTop)
+      );
+      rootStyle.setProperty(
+        '--ime-padding-bottom',
+        `${keyboardHeight > 80 ? keyboardHeight : 0}px`
+      );
+    };
+
+    updateImePadding();
+    window.visualViewport?.addEventListener('resize', updateImePadding);
+    window.visualViewport?.addEventListener('scroll', updateImePadding);
+    window.addEventListener('resize', updateImePadding);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateImePadding);
+      window.visualViewport?.removeEventListener('scroll', updateImePadding);
+      window.removeEventListener('resize', updateImePadding);
+      rootStyle.setProperty('--ime-padding-bottom', '0px');
+    };
+  }, []);
+
   useEffect(() => {
     ensureDefaultProfile()
       .then(async (prof) => {
@@ -331,8 +364,8 @@ export const App: React.FC = () => {
   // Блок 3.2: Екран блокування із запитом нативної біометричної автентифікації
   if (isBiometricLocked) {
     return (
-      <div className="min-h-[100dvh] w-full overflow-x-hidden flex items-center justify-center bg-slate-950 text-white p-6">
-        <div className="w-full max-w-sm bg-slate-900 rounded-3xl border border-slate-800 p-6 text-center space-y-5 shadow-2xl">
+      <div className="min-h-[100dvh] w-full overflow-x-hidden overflow-y-auto safe-top safe-bottom safe-x flex items-center justify-center bg-slate-950 text-white p-4 sm:p-6">
+        <div className="w-full max-w-sm sm:max-w-md my-auto bg-slate-900 rounded-3xl border border-slate-800 p-6 text-center space-y-5 shadow-2xl">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-600/30">
             <Lock className="w-8 h-8" />
           </div>
@@ -361,11 +394,11 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-[100dvh] w-full overflow-x-hidden flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 safe-main-bottom md:pb-8 transition-colors duration-200 print:bg-white print:pb-0">
+    <div className="min-h-[100dvh] w-full overflow-x-hidden flex flex-col bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 safe-x safe-main-bottom md:pb-8 transition-colors duration-200 print:bg-white print:pb-0">
       {/* Головний навігаційний хедер (з підтримкою safe-area-inset-top для Android) */}
       <header className="sticky top-0 z-30 bg-slate-900 dark:bg-slate-950 text-white shadow-md border-b border-slate-800/80 safe-top print:hidden">
         <div className="max-w-7xl mx-auto px-3 sm:px-6">
-          <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-3">
+          <div className="flex items-center justify-between min-h-12 py-1.5 gap-2 sm:gap-3">
             {/* Векторний фінансовий логотип та назва «Книга обліку доходів і витрат» */}
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-sky-400 via-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-md shadow-blue-600/20 shrink-0">
@@ -544,11 +577,11 @@ export const App: React.FC = () => {
       {/* ActionSheet меню центральної кнопки «+» (Додати операцію / Додати об'єкт ОЗ / Імпорт виписки з банку) */}
       {isActionSheetOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/70 p-3 sm:p-4 print:hidden animate-fade-in"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/70 p-3 sm:p-4 safe-x overflow-y-auto print:hidden animate-fade-in"
           onClick={() => setIsActionSheetOpen(false)}
         >
           <div
-            className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-2.5 max-h-[85dvh] overflow-y-auto safe-bottom animate-slide-up sm:animate-scale-in"
+            className="w-full max-w-sm sm:max-w-md md:max-w-lg my-auto bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-2.5 max-h-[85dvh] overflow-y-auto ime-safe-bottom animate-slide-up sm:animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-1 pb-1">
@@ -656,8 +689,8 @@ export const App: React.FC = () => {
 
       {/* Модальне вікно автоматичної пропозиції оновлення додатку */}
       {availableUpdate?.hasUpdate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 print:hidden animate-fade-in">
-          <div className="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85dvh] overflow-y-auto p-5 space-y-4 animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 safe-x overflow-y-auto print:hidden animate-fade-in">
+          <div className="w-full max-w-sm sm:max-w-md md:max-w-lg my-auto bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85dvh] overflow-y-auto p-5 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -763,7 +796,7 @@ export const App: React.FC = () => {
       </button>
 
       {/* Мобільна нижня панель навігації (BOTTOM BAR) */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-1.5 pt-1.5 safe-bottom grid grid-cols-5 items-center gap-1 shadow-lg transition-colors duration-200 print:hidden">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-1.5 pt-1.5 safe-bottom safe-x grid grid-cols-5 items-center gap-1 shadow-lg transition-colors duration-200 print:hidden">
         <button
           type="button"
           onClick={() => setActiveTab('JOURNAL')}
@@ -844,8 +877,8 @@ export const App: React.FC = () => {
 
       {/* Оверлей індикатора розпізнавання документа через Gemini Vision AI */}
       {isAiScanningOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 print:hidden animate-fade-in">
-          <div className="w-full max-w-xs bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-6 text-center space-y-4 shadow-2xl animate-scale-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 safe-x safe-top safe-bottom overflow-y-auto print:hidden animate-fade-in">
+          <div className="w-full max-w-xs sm:max-w-sm md:max-w-md my-auto bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-6 text-center space-y-4 shadow-2xl animate-scale-in">
             <div className="w-14 h-14 rounded-2xl bg-violet-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-violet-600/30 relative">
               <ScanLine className="w-7 h-7 animate-pulse" />
               <RefreshCw className="w-4 h-4 animate-spin absolute -bottom-1 -right-1 bg-slate-900 rounded-full p-0.5 text-sky-400" />

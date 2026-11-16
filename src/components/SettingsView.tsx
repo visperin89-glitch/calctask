@@ -458,7 +458,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // =========================================================================
   if (activeSubScreen === 'PROFILE') {
     return (
-      <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
+      <div className="max-w-2xl lg:max-w-4xl mx-auto space-y-4 animate-fade-in">
         <button
           type="button"
           onClick={() => setActiveSubScreen('NONE')}
@@ -468,7 +468,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>Назад до налаштувань</span>
         </button>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700/80 shadow-xs max-h-[85dvh] overflow-y-auto">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700/80 shadow-xs">
           <div className="flex items-center gap-2.5 mb-5">
             <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-sky-400">
               <UserCheck className="w-5 h-5" />
@@ -666,7 +666,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // =========================================================================
   if (activeSubScreen === 'PRESETS') {
     return (
-      <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
+      <div className="max-w-2xl lg:max-w-4xl mx-auto space-y-4 animate-fade-in">
         <button
           type="button"
           onClick={() => setActiveSubScreen('NONE')}
@@ -676,7 +676,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>Назад до налаштувань</span>
         </button>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-4 max-h-[85dvh] overflow-y-auto">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
@@ -784,7 +784,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // =========================================================================
   if (activeSubScreen === 'AI_SCANNER') {
     return (
-      <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
+      <div className="max-w-2xl lg:max-w-4xl mx-auto space-y-4 animate-fade-in">
         <button
           type="button"
           onClick={() => {
@@ -797,7 +797,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>Назад до налаштувань</span>
         </button>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700/80 shadow-xs max-h-[85dvh] overflow-y-auto space-y-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-4">
           <div className="flex items-center gap-2.5">
             <div className="p-2.5 rounded-xl bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 shrink-0">
               <ScanLine className="w-5 h-5" />
@@ -993,7 +993,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-5 animate-fade-in">
+    <div className="max-w-2xl lg:max-w-5xl mx-auto space-y-5 animate-fade-in">
       {statusMsg && (
         <div
           className={`p-3.5 rounded-2xl border flex items-center gap-3 text-xs sm:text-sm font-semibold shadow-xs animate-fade-in ${
@@ -1007,8 +1007,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
+      <div className="space-y-5 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0 items-start">
       {/* 1. ВЕРХНЯ КАРТКА КОРИСТУВАЧА (Акаунт платника та податкові параметри) */}
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 lg:col-span-2">
         <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Акаунт платника та податкові параметри
         </div>
@@ -1462,6 +1463,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             Поточна версія: {CURRENT_APP_VERSION}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -404,8 +404,8 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 overflow-y-auto print:hidden animate-fade-in">
-      <div className="w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85dvh] flex flex-col animate-slide-up sm:animate-scale-in">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/75 p-0 sm:p-4 safe-x overflow-y-auto print:hidden animate-fade-in">
+      <div className="w-full max-w-lg sm:max-w-xl md:max-w-2xl bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85dvh] flex flex-col animate-slide-up sm:animate-scale-in">
         {/* Шапка модалки */}
         <div className="flex items-center justify-between px-4 py-3.5 bg-slate-900 dark:bg-slate-950 text-white shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -621,7 +621,7 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                 </button>
 
                 {isAttorneyDirectoryOpen && (
-                  <div className="p-3 bg-white dark:bg-slate-900 border-t border-indigo-200 dark:border-indigo-800/70 divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto animate-fade-in">
+                  <div className="p-3 bg-white dark:bg-slate-900 border-t border-indigo-200 dark:border-indigo-800/70 divide-y divide-slate-100 dark:divide-slate-800 max-h-[40dvh] overflow-y-auto animate-fade-in">
                     {ATTORNEY_EXPENSE_TEMPLATES.map((item, idx) => {
                       const catInfo = EXPENSE_CATEGORY_MAP[item.category];
                       const isSelected = selectedAttorneyTemplateId === item.id;
@@ -670,7 +670,7 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                   Категорія витрат (Графи 6–9 Форми № 261) *
                 </label>
-                <div className="grid grid-cols-1 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {EXPENSE_CATEGORIES.map((cat) => {
                     const isSelected = expenseCategory === cat.id;
                     return (
@@ -967,7 +967,7 @@ export const QuickInputModal: React.FC<QuickInputModalProps> = ({
           </div>
 
           {/* Кнопки дій */}
-          <div className="flex items-center gap-2 pt-1 safe-bottom">
+          <div className="flex items-center gap-2 pt-1 ime-safe-bottom">
             <button
               type="button"
               onClick={onClose}

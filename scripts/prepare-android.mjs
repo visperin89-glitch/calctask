@@ -191,6 +191,7 @@ tasks.whenTaskAdded { task ->
         android:debuggable="false"
         android:icon="@mipmap/ic_launcher"
         android:label="Книга обліку ФОП"
+        android:resizeableActivity="true"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
@@ -198,11 +199,13 @@ tasks.whenTaskAdded { task ->
         tools:replace="android:debuggable,android:allowBackup,android:label">
 
         <activity
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="Книга обліку ФОП"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -224,6 +227,79 @@ tasks.whenTaskAdded { task ->
 `;
     fs.writeFileSync(manifestPath, cleanManifest, 'utf8');
     console.log('[prepare-android] Wrote clean Play-Protect-safe AndroidManifest.xml');
+  }
+
+  // 6. Налаштовуємо WindowInsets (systemBars + displayCutout + ime) у MainActivity.java та activity_main.xml
+  const mainActivityPath = path.join(
+    androidDir,
+    'app',
+    'src',
+    'main',
+    'java',
+    'ua',
+    'taxbook',
+    'app',
+    'MainActivity.java'
+  );
+  if (fs.existsSync(path.dirname(mainActivityPath))) {
+    const mainActivityCode = `package ua.taxbook.app;
+
+import android.os.Bundle;
+import android.view.View;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        View rootView = findViewById(android.R.id.content);
+        if (rootView != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(rootView, (view, windowInsets) -> {
+                Insets insets = windowInsets.getInsets(
+                    WindowInsetsCompat.Type.systemBars()
+                        | WindowInsetsCompat.Type.displayCutout()
+                        | WindowInsetsCompat.Type.ime()
+                );
+                view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+                return WindowInsetsCompat.CONSUMED;
+            });
+        }
+    }
+}
+`;
+    fs.writeFileSync(mainActivityPath, mainActivityCode, 'utf8');
+    console.log('[prepare-android] Configured WindowInsets listener in MainActivity.java');
+  }
+
+  const activityLayoutPath = path.join(
+    androidDir,
+    'app',
+    'src',
+    'main',
+    'res',
+    'layout',
+    'activity_main.xml'
+  );
+  if (fs.existsSync(activityLayoutPath)) {
+    const layoutContent = `<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    tools:context=".MainActivity">
+
+    <WebView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
+`;
+    fs.writeFileSync(activityLayoutPath, layoutContent, 'utf8');
+    console.log('[prepare-android] Enabled fitsSystemWindows in activity_main.xml');
   }
 
   // Забезпечуємо LF-закінчення рядків та права виконання для gradlew на Linux CI
